@@ -15,8 +15,8 @@
 const Fiesta = (() => {
 
   /* ---------- CONFIGURACION (completar con tus datos) -------- */
-  const SUPABASE_URL  = '';   // ej: https://abcdefgh.supabase.co
-  const SUPABASE_KEY  = '';   // la "anon public key"
+  const SUPABASE_URL  = 'https://jqmaedynhvkhhtoehbpd.supabase.co';   // ej: https://abcdefgh.supabase.co
+  const SUPABASE_KEY  = 'sb_publishable_cG8nJktS49STqlraQCuHRQ_kcxWs5GZ';   // la "anon public key"
   /* ----------------------------------------------------------- */
 
   const hayServidor = () => SUPABASE_URL !== '' && SUPABASE_KEY !== '';
