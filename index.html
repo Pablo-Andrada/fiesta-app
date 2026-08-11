@@ -159,8 +159,6 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .dpad{ display:grid; grid-template-columns:repeat(3,56px); grid-template-rows:repeat(3,56px); gap:6px; justify-content:center; margin:14px auto 0 } .dpad .btn{ padding:0; font-size:22px; border-radius:12px; display:flex; align-items:center; justify-content:center } .dpad .sp{ visibility:hidden }
 .lr{ display:flex; gap:12px; justify-content:center; margin-top:12px } .lr .btn{ font-size:24px; min-width:74px }
 
-.ttt-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; max-width:260px; margin:8px auto }
-.ttt-cell{ aspect-ratio:1/1; border:3px solid var(--ink); border-radius:14px; cursor:pointer; background:var(--panel2); display:flex; align-items:center; justify-content:center; font-size:44px } .ttt-cell:hover{ background:var(--panel) }
 
 .tri-q{ font-weight:800; font-size:18px; margin:6px 0 12px; min-height:48px } .tri-opts{ display:grid; gap:10px }
 .tri-opt{ text-align:left; font-family:"Baloo 2"; font-weight:700; font-size:15px; padding:12px 14px; border-radius:14px; border:3px solid var(--ink); cursor:pointer; background:var(--panel2); color:var(--text) }
@@ -212,7 +210,10 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 
   <div class="topbar">
     <div class="yo"><span class="ava" id="miAvatar">🙂</span><span class="nom" id="miApodo">—</span></div>
-    <span class="chip off" id="chipConexion">local</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="btnSonido" class="chip on" style="cursor:pointer;font-family:'Baloo 2';font-size:16px;padding:5px 12px">🔊</button>
+      <span class="chip off" id="chipConexion">local</span>
+    </div>
   </div>
 
   <!-- ===== JUEGOS ===== -->
@@ -242,6 +243,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 </div>
 
 <script src="ranking.js"></script>
+<script src="sonido.js"></script>
 <script>
 /* ================================================================
    CONFIGURACION DE LOS JUEGOS DISPONIBLES
@@ -254,8 +256,6 @@ const JUEGOS=[
   { id:'autos',   nombre:'Autitos',  icono:'🏎️', fn:()=>Autos },
   { id:'basquet', nombre:'Básquet',  icono:'🏀', fn:()=>Basquet },
   { id:'nave',    nombre:'Nave',     icono:'🚀', fn:()=>Nave },
-  { id:'boxeo',   nombre:'Boxeo',    icono:'🥊', fn:()=>Boxeo },
-  { id:'ttt',     nombre:'Ta-Te-Ti', icono:'⭕', fn:()=>Tateti },
   { id:'trivia',  nombre:'Trivia',   icono:'❓', fn:()=>Trivia },
 ];
 
@@ -322,6 +322,13 @@ async function entrarAJugar(){
   renderJuegos(); burst(160);
 }
 
+/* Boton para prender / apagar el sonido */
+document.getElementById('btnSonido').onclick=function(){
+  const on=Sonido.toggle();
+  this.textContent = on ? '🔊' : '🔇';
+  this.className   = 'chip ' + (on ? 'on' : 'off');
+};
+
 /* ================================================================
    SOLAPA JUEGOS
    ================================================================ */
@@ -384,6 +391,7 @@ document.querySelectorAll('.tabbar button').forEach(b=>b.onclick=()=>showTab(b.d
 const modal=document.getElementById('modal'), modalHost=document.getElementById('modalHost');
 let cleanup=null;
 function openGame(id){
+  Sonido.play('tap');
   if(cleanup){ cleanup(); cleanup=null; }
   modalHost.innerHTML=''; modal.classList.add('open');
   const j=JUEGOS.find(x=>x.id===id); if(j) j.fn()(modalHost);
@@ -430,14 +438,14 @@ function Memoria(el){
   }
   function flip(c){
     if(lock||c.classList.contains('show')||c.classList.contains('done'))return;
-    c.classList.add('show');
+    c.classList.add('show'); Sonido.play('tap');
     if(!first){ first=c; return; }
     moves++; el.querySelector('#mMoves').textContent=moves;
-    if(first.dataset.sym===c.dataset.sym){ first.classList.add('done'); c.classList.add('done'); first=null; pairs++; if(pairs===need) levelDone(); }
-    else{ lock=true; const a=first,b=c; first=null; setTimeout(()=>{ a.classList.remove('show'); b.classList.remove('show'); lock=false; },700); }
+    if(first.dataset.sym===c.dataset.sym){ Sonido.play('acierto'); first.classList.add('done'); c.classList.add('done'); first=null; pairs++; if(pairs===need) levelDone(); }
+    else{ Sonido.play('error'); lock=true; const a=first,b=c; first=null; setTimeout(()=>{ a.classList.remove('show'); b.classList.remove('show'); lock=false; },700); }
   }
   function levelDone(){
-    awardLevel('memoria', level); Fiesta.guardarPuntaje('memoria', level*100, level); burst();
+    Sonido.play('nivel'); awardLevel('memoria', level); Fiesta.guardarPuntaje('memoria', level*100, level); burst();
     if(level<5){ banner.innerHTML=`¡Nivel ${level} listo! ⭐`;
       const b=document.createElement('button'); b.className='btn mt'; b.textContent='Siguiente nivel ▶'; b.onclick=()=>{ level++; build(); };
       banner.appendChild(document.createElement('br')); banner.appendChild(b);
@@ -481,10 +489,10 @@ function Snake(el){
   function step(){
     if(!alive||paused||done)return; dir=nextDir;
     let hx=(snake[0].x+dir.x+N)%N, hy=(snake[0].y+dir.y+N)%N; const head={x:hx,y:hy};
-    if(snake.some(s=>s.x===hx&&s.y===hy) || obst.has(hx+','+hy)){ alive=false; el.querySelector('#sBanner').innerHTML=`<span style="color:var(--magenta)">¡Perdiste!</span>`; addRetry(); return; }
+    if(snake.some(s=>s.x===hx&&s.y===hy) || obst.has(hx+','+hy)){ alive=false; Sonido.play('gameover'); Sonido.vibrar(120); el.querySelector('#sBanner').innerHTML=`<span style="color:var(--magenta)">¡Perdiste!</span>`; addRetry(); return; }
     snake.unshift(head);
     if(hx===food.x&&hy===food.y){
-      score=(score||0)+1; metaCount++; el.querySelector('#sScore').textContent=score;
+      Sonido.play('comer'); score=(score||0)+1; metaCount++; el.querySelector('#sScore').textContent=score;
       const cfg=SNAKE_LEVELS[level-1]; el.querySelector('#sMeta').textContent=metaCount+'/'+cfg.meta;
       if(score>(Scores.data.snakeBest||0)){ Scores.data.snakeBest=score; Scores.save(); }
       if(metaCount>=cfg.meta){ levelUp(); return; } placeFood();
@@ -492,7 +500,7 @@ function Snake(el){
     draw();
   }
   function levelUp(){
-    awardLevel('snake', level); Fiesta.guardarPuntaje('snake', score, level); burst();
+    Sonido.play('nivel'); awardLevel('snake', level); Fiesta.guardarPuntaje('snake', score, level); burst();
     if(level<5){ done=true; if(loop) clearInterval(loop); const bn=el.querySelector('#sBanner'); bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
       const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
       bn.appendChild(document.createElement('br')); bn.appendChild(b);
@@ -598,8 +606,8 @@ function Autos(el){
     cars.forEach(c=>carDraw(LANES[c.lane], c.y, c.color, false));
     carDraw(LANES[lane], playerY, '#26e8ff', true);
   }
-  function crash(){ alive=false; el.querySelector('#aBanner').innerHTML=`<span style="color:var(--magenta)">¡Chocaste! 💥</span>`; addRetry(); }
-  function levelUp(){ awardLevel('autos', level); Fiesta.guardarPuntaje('autos', dodged + (level-1)*50, level); burst(); done=true; const bn=el.querySelector('#aBanner');
+  function crash(){ alive=false; Sonido.play('choque'); Sonido.vibrar(140); el.querySelector('#aBanner').innerHTML=`<span style="color:var(--magenta)">¡Chocaste! 💥</span>`; addRetry(); }
+  function levelUp(){ Sonido.play('nivel'); awardLevel('autos', level); Fiesta.guardarPuntaje('autos', dodged + (level-1)*50, level); burst(); done=true; const bn=el.querySelector('#aBanner');
     if(level<5){ bn.innerHTML=`¡Nivel ${level} superado! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
     else bn.innerHTML=`🏆 ¡Ganaste los Autitos! 5 ⭐`; }
   function addRetry(){ const bn=el.querySelector('#aBanner'); const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel'; b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
@@ -638,8 +646,8 @@ function Basquet(el){
       else if(ball.y>H+40 || ball.x<-40 || ball.x>W+40){ resetBall(); } }
     draw(); raf=requestAnimationFrame(frame);
   }
-  function scored(){ made++; const cfg=BASKET_LEVELS[level-1]; el.querySelector('#bMeta').textContent=made+'/'+cfg.meta; resetBall(); if(made>=cfg.meta) levelUp(); else burst(40); }
-  function levelUp(){ awardLevel('basquet', level); Fiesta.guardarPuntaje('basquet', level*100, level); burst(); done=true; const bn=el.querySelector('#bBanner');
+  function scored(){ Sonido.play('acierto'); made++; const cfg=BASKET_LEVELS[level-1]; el.querySelector('#bMeta').textContent=made+'/'+cfg.meta; resetBall(); if(made>=cfg.meta) levelUp(); else burst(40); }
+  function levelUp(){ Sonido.play('nivel'); awardLevel('basquet', level); Fiesta.guardarPuntaje('basquet', level*100, level); burst(); done=true; const bn=el.querySelector('#bBanner');
     if(level<5){ bn.innerHTML=`¡Nivel ${level} superado! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
     else bn.innerHTML=`🏆 ¡Ganaste el Básquet! 5 ⭐`; }
   function draw(){
@@ -660,318 +668,308 @@ function Basquet(el){
 }
 
 /* ============================================================
-   NAVE · shooter espacial (tipo Galaga) · 5 niveles
+   NAVE · shooter espacial · 5 niveles
+   ------------------------------------------------------------
+   NOVEDADES DE ESTA VERSION:
+     - Explosiones (emoji 💥) al destruir un bicho o al chocar.
+     - Los bichos DISPARAN: hay que esquivar sus tiros.
+     - COMETAS (☄️): al pegarles, suben tu equipacion.
+     - 5 EQUIPACIONES: cada una tiene su propia nave dibujada
+       y un tipo de disparo distinto (mas potente cada vez).
    ============================================================ */
-/* Colores de los extraterrestres por nivel: 1 azul · 2 naranja · 3 rojo · 4 verde · 5 blanco */
+
+/* Colores de los extraterrestres segun el nivel */
 const ALIEN_COLORS=['#3b82f6','#ff8c1a','#ff2e3f','#8cff5a','#ffffff'];
-const NAVE_LEVELS=[
-  { meta:24, espd:1.4, spawn:900 },
-  { meta:36, espd:1.8, spawn:780 },
-  { meta:48, espd:2.2, spawn:670 },
-  { meta:60, espd:2.7, spawn:570 },
-  { meta:72, espd:3.3, spawn:480 },
+
+/* ------------------------------------------------------------
+   LAS 5 EQUIPACIONES
+   Se empieza en la 1 y se sube agarrando cometas.
+     nombre  = como se llama (se muestra en pantalla)
+     color   = color de la nave y de sus tiros
+     tiros   = cuantas balas dispara por vez
+     abanico = cuanto se abren las balas hacia los costados
+     cadencia= milisegundos entre disparo y disparo (menos = mas rapido)
+     dano    = cuanta vida le saca a un bicho por impacto
+   ------------------------------------------------------------ */
+const EQUIPOS=[
+  { nombre:'Básica',    color:'#26e8ff', tiros:1, abanico:0,    cadencia:260, dano:1 },
+  { nombre:'Doble',     color:'#8cff5a', tiros:2, abanico:0,    cadencia:240, dano:1 },
+  { nombre:'Triple',    color:'#ffe14d', tiros:3, abanico:0.55, cadencia:220, dano:1 },
+  { nombre:'Plasma',    color:'#ff8c1a', tiros:3, abanico:0.75, cadencia:180, dano:2 },
+  { nombre:'MEGA LÁSER',color:'#ff2e9a', tiros:5, abanico:1.0,  cadencia:150, dano:3 },
 ];
+
+const NAVE_LEVELS=[
+  { meta:24, espd:1.4, spawn:900, tiroEnemigo:2600 },
+  { meta:36, espd:1.8, spawn:780, tiroEnemigo:2200 },
+  { meta:48, espd:2.2, spawn:670, tiroEnemigo:1900 },
+  { meta:60, espd:2.7, spawn:570, tiroEnemigo:1600 },
+  { meta:72, espd:3.3, spawn:480, tiroEnemigo:1300 },
+];
+
 function Nave(el){
   el.innerHTML=`<h2>🚀 Nave</h2>
-    <p class="lead">Movete con ◀ ▶ y disparale a los extraterrestres con 🔥</p>
+    <p class="lead">Movete con ◀ ▶ y disparé con 🔥. Pegale a los ☄️ para mejorar tu nave.</p>
     <div class="hud"><span class="lv" id="nLv"></span><span id="nLives">❤️❤️❤️</span><span>👾 <span class="stat" id="nMeta">0</span></span></div>
+    <div class="center" style="font-weight:800;font-size:13px;margin-bottom:6px">
+      Equipo: <span class="stat" id="nEquipo">Básica</span></div>
     <canvas id="naveCanvas" width="300" height="380"></canvas>
     <div class="lr"><button class="btn" id="nL">◀</button><button class="btn danger" id="nFire">🔥</button><button class="btn" id="nR">▶</button></div>
     <div class="banner" id="nBanner"></div>`;
-  const cv=el.querySelector('#naveCanvas'), ctx=cv.getContext('2d'); const W=cv.width, H=cv.height, shipY=H-34;
+
+  const cv=el.querySelector('#naveCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height, shipY=H-34;
+
+  /* Estrellas del fondo (efecto de movimiento) */
   const stars=Array.from({length:40},()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random()*1.5+0.5}));
-  let level,kills,lives,shipX,bullets,enemies,alive,done,raf,last,spawnT,lastShot,moveL,moveR,firing;
+
+  let level,kills,lives,shipX,equipo;
+  let bullets,      // tiros del jugador
+      eBullets,     // tiros de los enemigos
+      enemies,      // los bichos
+      cometas,      // los cometas que dan mejoras
+      booms;        // explosiones en pantalla
+  let alive,done,raf,last,spawnT,shootT,cometaT,lastShot,moveL,moveR,firing,invul;
+
+  /* ---------- Arranque de cada nivel ---------- */
   function startLevel(l){
     level=l; const cfg=NAVE_LEVELS[l-1];
-    kills=0; lives=3; shipX=W/2; bullets=[]; enemies=[]; alive=true; done=false; spawnT=0; lastShot=0; last=performance.now(); moveL=moveR=firing=false;
-    el.querySelector('#nLv').textContent='Nivel '+l+'/5'; el.querySelector('#nMeta').textContent='0/'+cfg.meta; el.querySelector('#nLives').textContent='❤️❤️❤️'; el.querySelector('#nBanner').textContent='';
+    kills=0; lives=3; shipX=W/2;
+    equipo = (l===1) ? 0 : equipo;        // al reintentar el nivel 1 vuelve a la basica
+    if(equipo===undefined) equipo=0;
+    bullets=[]; eBullets=[]; enemies=[]; cometas=[]; booms=[];
+    alive=true; done=false; spawnT=0; shootT=0; cometaT=0; lastShot=0; invul=0;
+    last=performance.now(); moveL=moveR=firing=false;
+    el.querySelector('#nLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#nMeta').textContent='0/'+cfg.meta;
+    el.querySelector('#nLives').textContent='❤️❤️❤️';
+    el.querySelector('#nBanner').textContent='';
+    actualizarEquipo();
     if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
   }
-  function loseLife(){ lives--; el.querySelector('#nLives').textContent='❤️'.repeat(Math.max(0,lives))||'💀'; if(lives<=0){ gameOver(); } }
-  function gameOver(){ alive=false; el.querySelector('#nBanner').innerHTML=`<span style="color:var(--magenta)">¡Te alcanzaron! 👾</span>`; const bn=el.querySelector('#nBanner'); const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel'; b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
+  function actualizarEquipo(){ el.querySelector('#nEquipo').textContent=EQUIPOS[equipo].nombre; }
+
+  /* ---------- Explosiones ---------- */
+  function explotar(x,y,grande){ booms.push({x,y,t:grande?520:380,max:grande?520:380,grande}); }
+
+  /* ---------- Perder una vida ---------- */
+  function loseLife(){
+    if(invul>0) return;                    // breve invulnerabilidad tras recibir daño
+    lives--; invul=1200;
+    Sonido.play('choque'); Sonido.vibrar(120);
+    explotar(shipX, shipY, true);
+    el.querySelector('#nLives').textContent='❤️'.repeat(Math.max(0,lives))||'💀';
+    if(lives<=0) gameOver();
+  }
+  function gameOver(){
+    alive=false; Sonido.play('gameover');
+    const bn=el.querySelector('#nBanner');
+    bn.innerHTML=`<span style="color:var(--magenta)">¡Te alcanzaron! 👾</span>`;
+    const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel';
+    b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+
+  /* ---------- Bucle principal del juego ---------- */
   function frame(now){
     const dt=Math.min(50, now-last); last=now;
     if(alive && !done){
-      const cfg=NAVE_LEVELS[level-1];
-      if(moveL) shipX-=4.2; if(moveR) shipX+=4.2; shipX=Math.max(20,Math.min(W-20,shipX));
-      if(firing && now-lastShot>240){ bullets.push({x:shipX,y:shipY-16}); lastShot=now; }
-      bullets.forEach(b=>b.y-=6); bullets=bullets.filter(b=>b.y>-10);
-      spawnT+=dt; if(spawnT>=cfg.spawn){ spawnT=0; enemies.push({x:20+Math.random()*(W-40), y:-16, ph:Math.random()*100}); }
-      for(let i=enemies.length-1;i>=0;i--){ const en=enemies[i]; en.y+=cfg.espd*(dt/16.7); en.x+=Math.sin((en.y+en.ph)/28)*1.1;
-        if(Math.hypot(en.x-shipX, en.y-shipY)<19){ enemies.splice(i,1); loseLife(); if(!alive) return; continue; }
-        if(en.y>H+16){ enemies.splice(i,1); continue; }   // si escapa por abajo NO penaliza
-        let hit=false;
-        for(let j=bullets.length-1;j>=0;j--){ if(Math.abs(bullets[j].x-en.x)<16 && Math.abs(bullets[j].y-en.y)<18){ bullets.splice(j,1); hit=true; break; } }
-        if(hit){ enemies.splice(i,1); kills++; el.querySelector('#nMeta').textContent=kills+'/'+cfg.meta; if(kills>=cfg.meta){ levelUp(); return; } }
+      const cfg=NAVE_LEVELS[level-1], eq=EQUIPOS[equipo];
+      if(invul>0) invul-=dt;
+
+      /* Mover la nave */
+      if(moveL) shipX-=4.2; if(moveR) shipX+=4.2;
+      shipX=Math.max(20,Math.min(W-20,shipX));
+
+      /* Disparar (segun la cadencia de la equipacion) */
+      if(firing && now-lastShot>eq.cadencia){
+        lastShot=now; Sonido.play('disparo');
+        for(let k=0;k<eq.tiros;k++){
+          // Reparte las balas en abanico: la del medio va derecho
+          const desvio=(k-(eq.tiros-1)/2)*eq.abanico;
+          bullets.push({x:shipX, y:shipY-16, vx:desvio, dano:eq.dano});
+        }
       }
+      /* Mover tiros propios */
+      bullets.forEach(b=>{ b.y-=6.5; b.x+=b.vx; });
+      bullets=bullets.filter(b=>b.y>-10 && b.x>-10 && b.x<W+10);
+
+      /* Aparecen bichos */
+      spawnT+=dt;
+      if(spawnT>=cfg.spawn){ spawnT=0;
+        enemies.push({x:20+Math.random()*(W-40), y:-16, ph:Math.random()*100, vida:1}); }
+
+      /* Aparecen cometas (cada 9 segundos aprox) */
+      cometaT+=dt;
+      if(cometaT>=9000){ cometaT=0;
+        cometas.push({x:30+Math.random()*(W-60), y:-20, giro:0}); }
+
+      /* Los bichos disparan */
+      shootT+=dt;
+      if(shootT>=cfg.tiroEnemigo && enemies.length){ shootT=0;
+        const tirador=enemies[(Math.random()*enemies.length)|0];
+        if(tirador.y>0 && tirador.y<H*0.7) eBullets.push({x:tirador.x, y:tirador.y+12});
+      }
+      /* Mover tiros enemigos y ver si nos pegan */
+      eBullets.forEach(b=>b.y+=3.4);
+      for(let i=eBullets.length-1;i>=0;i--){
+        const b=eBullets[i];
+        if(Math.hypot(b.x-shipX,b.y-shipY)<17){ eBullets.splice(i,1); loseLife(); if(!alive) return; continue; }
+        if(b.y>H+10) eBullets.splice(i,1);
+      }
+
+      /* Cometas: moverlos y ver si les pegamos */
+      for(let i=cometas.length-1;i>=0;i--){
+        const c=cometas[i]; c.y+=1.5; c.giro+=0.05;
+        if(c.y>H+20){ cometas.splice(i,1); continue; }
+        let tocado=false;
+        for(let j=bullets.length-1;j>=0;j--){
+          if(Math.hypot(bullets[j].x-c.x, bullets[j].y-c.y)<20){ bullets.splice(j,1); tocado=true; break; }
+        }
+        if(tocado){
+          cometas.splice(i,1); explotar(c.x,c.y,false);
+          if(equipo<EQUIPOS.length-1){ equipo++; actualizarEquipo(); Sonido.play('powerup'); Sonido.vibrar(60); }
+          else Sonido.play('acierto');
+        }
+      }
+
+      /* Bichos: moverlos, chequear choques y disparos */
+      for(let i=enemies.length-1;i>=0;i--){
+        const en=enemies[i];
+        en.y+=cfg.espd*(dt/16.7);
+        en.x+=Math.sin((en.y+en.ph)/28)*1.1;                    // zigzag
+        if(Math.hypot(en.x-shipX,en.y-shipY)<19){                // choca con la nave
+          enemies.splice(i,1); explotar(en.x,en.y,false); loseLife(); if(!alive) return; continue; }
+        if(en.y>H+16){ enemies.splice(i,1); continue; }          // escapa: no penaliza
+        let impacto=null;
+        for(let j=bullets.length-1;j>=0;j--){
+          if(Math.abs(bullets[j].x-en.x)<16 && Math.abs(bullets[j].y-en.y)<18){ impacto=bullets[j].dano; bullets.splice(j,1); break; }
+        }
+        if(impacto){
+          enemies.splice(i,1); explotar(en.x,en.y,false);
+          Sonido.play('explosion');
+          kills++; el.querySelector('#nMeta').textContent=kills+'/'+cfg.meta;
+          if(kills>=cfg.meta){ levelUp(); return; }
+        }
+      }
+
+      /* Envejecer las explosiones */
+      booms.forEach(b=>b.t-=dt);
+      booms=booms.filter(b=>b.t>0);
     }
     draw(); raf=requestAnimationFrame(frame);
   }
-  function levelUp(){ awardLevel('nave', level); Fiesta.guardarPuntaje('nave', kills + (level-1)*80, level); burst(); done=true; const bn=el.querySelector('#nBanner');
-    if(level<5){ bn.innerHTML=`¡Nivel ${level} superado! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
-    else bn.innerHTML=`🏆 ¡Ganaste la Nave! 5 ⭐`; }
+
+  /* ---------- Pasar de nivel ---------- */
+  function levelUp(){
+    awardLevel('nave', level); Fiesta.guardarPuntaje('nave', kills + (level-1)*80, level);
+    done=true; burst();
+    const bn=el.querySelector('#nBanner');
+    if(level<5){
+      Sonido.play('nivel');
+      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
+      const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
+      b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b);
+    } else { Sonido.play('victoria'); bn.innerHTML=`🏆 ¡Ganaste la Nave! 5 ⭐`; }
+  }
+
+  /* ---------- Dibujo de la nave segun la equipacion ---------- */
+  function dibujarNave(x,y,idx){
+    const c=EQUIPOS[idx].color;
+    ctx.save(); ctx.translate(x,y);
+    // Si estamos invulnerables, la nave parpadea
+    if(invul>0 && Math.floor(invul/100)%2===0) ctx.globalAlpha=0.35;
+    ctx.fillStyle=c; ctx.strokeStyle='#0a0416'; ctx.lineWidth=2;
+
+    if(idx===0){                                   // 1 · Básica: triangulo simple
+      ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-12,12); ctx.lineTo(12,12); ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if(idx===1){                            // 2 · Doble: con dos alerones
+      ctx.beginPath(); ctx.moveTo(0,-17); ctx.lineTo(-9,8); ctx.lineTo(9,8); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillRect(-16,2,7,12); ctx.fillRect(9,2,7,12);
+      ctx.strokeRect(-16,2,7,12); ctx.strokeRect(9,2,7,12);
+    } else if(idx===2){                            // 3 · Triple: alas en flecha
+      ctx.beginPath(); ctx.moveTo(0,-19); ctx.lineTo(-8,6); ctx.lineTo(8,6); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-8,0); ctx.lineTo(-19,12); ctx.lineTo(-6,12); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(8,0);  ctx.lineTo(19,12);  ctx.lineTo(6,12);  ctx.closePath(); ctx.fill(); ctx.stroke();
+    } else if(idx===3){                            // 4 · Plasma: cuerpo ancho con cañones
+      ctx.beginPath(); ctx.moveTo(0,-20); ctx.lineTo(-11,4); ctx.lineTo(-6,12); ctx.lineTo(6,12); ctx.lineTo(11,4); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillRect(-20,-2,6,16); ctx.fillRect(14,-2,6,16);
+      ctx.strokeRect(-20,-2,6,16); ctx.strokeRect(14,-2,6,16);
+      ctx.fillStyle='#fff'; ctx.fillRect(-2,-14,4,8);
+    } else {                                       // 5 · MEGA LÁSER: nave grande con alas y brillo
+      ctx.shadowColor=c; ctx.shadowBlur=14;
+      ctx.beginPath(); ctx.moveTo(0,-22); ctx.lineTo(-9,0); ctx.lineTo(-22,10); ctx.lineTo(-7,10);
+      ctx.lineTo(-5,14); ctx.lineTo(5,14); ctx.lineTo(7,10); ctx.lineTo(22,10); ctx.lineTo(9,0); ctx.closePath();
+      ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(0,-6,4,0,7); ctx.fill();
+    }
+    // Fuego del motor
+    ctx.fillStyle='#ffb03a'; ctx.globalAlpha*= (0.6+Math.random()*0.4);
+    ctx.beginPath(); ctx.moveTo(-4,13); ctx.lineTo(0,13+8+Math.random()*6); ctx.lineTo(4,13); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  /* ---------- Dibujo general ---------- */
   function draw(){
     ctx.fillStyle='#05030f'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='rgba(255,255,255,.7)'; stars.forEach(st=>{ st.y+=0.6; if(st.y>H){ st.y=0; st.x=Math.random()*W; } ctx.fillRect(st.x,st.y,st.s,st.s); });
-    ctx.fillStyle='#ffe14d'; bullets.forEach(b=>ctx.fillRect(b.x-2,b.y-8,4,10));
+
+    /* Estrellas que bajan */
+    ctx.fillStyle='rgba(255,255,255,.7)';
+    stars.forEach(st=>{ st.y+=0.6; if(st.y>H){ st.y=0; st.x=Math.random()*W; } ctx.fillRect(st.x,st.y,st.s,st.s); });
+
+    /* Tiros del jugador (del color de su equipacion) */
+    const eq=EQUIPOS[equipo];
+    ctx.fillStyle=eq.color;
+    bullets.forEach(b=>{
+      const ancho = eq.dano>=3 ? 6 : eq.dano>=2 ? 5 : 4;
+      ctx.fillRect(b.x-ancho/2, b.y-9, ancho, 11);
+    });
+
+    /* Tiros enemigos */
+    ctx.fillStyle='#ff5a5a';
+    eBullets.forEach(b=>{ ctx.beginPath(); ctx.arc(b.x,b.y,4,0,7); ctx.fill(); });
+
+    /* Cometas */
+    ctx.font='26px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    cometas.forEach(c=>{ ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(Math.sin(c.giro)*0.4); ctx.fillText('☄️',0,0); ctx.restore(); });
+
+    /* Bichos (dibujados con formas para poder pintarlos) */
     const alienCol=ALIEN_COLORS[Math.min(4,level-1)];
     enemies.forEach(en=>{
       const x=en.x, y=en.y;
       ctx.fillStyle=alienCol;
-      ctx.fillRect(x-11,y-7,22,12);                                  // cuerpo
-      ctx.fillRect(x-7,y-12,14,5);                                   // cabeza
-      ctx.fillRect(x-15,y-3,4,7); ctx.fillRect(x+11,y-3,4,7);        // brazos
-      ctx.fillRect(x-9,y+5,5,5);  ctx.fillRect(x+4,y+5,5,5);         // patas
+      ctx.fillRect(x-11,y-7,22,12);                              // cuerpo
+      ctx.fillRect(x-7,y-12,14,5);                               // cabeza
+      ctx.fillRect(x-15,y-3,4,7); ctx.fillRect(x+11,y-3,4,7);    // brazos
+      ctx.fillRect(x-9,y+5,5,5);  ctx.fillRect(x+4,y+5,5,5);     // patas
       ctx.fillStyle='#0a0416';
-      ctx.fillRect(x-6,y-5,4,4);  ctx.fillRect(x+2,y-5,4,4);         // ojos
+      ctx.fillRect(x-6,y-5,4,4);  ctx.fillRect(x+2,y-5,4,4);     // ojos
     });
-    ctx.save(); ctx.translate(shipX,shipY); ctx.rotate(-Math.PI/4); ctx.font='30px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🚀',0,0); ctx.restore();
+
+    /* La nave */
+    dibujarNave(shipX, shipY, equipo);
+
+    /* Explosiones: el emoji crece y se desvanece */
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    booms.forEach(b=>{
+      const p=1-(b.t/b.max);                       // 0 = recien nacida, 1 = por desaparecer
+      const tam=(b.grande?38:26)*(0.6+p*0.9);
+      ctx.save(); ctx.globalAlpha=Math.max(0,1-p);
+      ctx.font=tam+'px serif'; ctx.fillText('💥', b.x, b.y); ctx.restore();
+    });
   }
-  const bind=(id,set)=>{ const b=el.querySelector(id); b.addEventListener('contextmenu',e=>e.preventDefault()); b.addEventListener('pointerdown',e=>{e.preventDefault(); set(true);}); ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>set(false))); };
+
+  /* ---------- Controles ---------- */
+  const bind=(id,set)=>{ const b=el.querySelector(id);
+    b.addEventListener('contextmenu',e=>e.preventDefault());
+    b.addEventListener('pointerdown',e=>{e.preventDefault(); set(true);});
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>set(false))); };
   bind('#nL',v=>moveL=v); bind('#nR',v=>moveR=v); bind('#nFire',v=>firing=v);
   function kd(e){ if(e.key==='ArrowLeft'||e.key==='a'){moveL=true;} if(e.key==='ArrowRight'||e.key==='d'){moveR=true;} if(e.key===' '){e.preventDefault();firing=true;} }
   function ku(e){ if(e.key==='ArrowLeft'||e.key==='a'){moveL=false;} if(e.key==='ArrowRight'||e.key==='d'){moveR=false;} if(e.key===' '){firing=false;} }
   document.addEventListener('keydown',kd); document.addEventListener('keyup',ku);
-  startLevel(1);
+
+  equipo=0; startLevel(1);
   cleanup=()=>{ if(raf) cancelAnimationFrame(raf); document.removeEventListener('keydown',kd); document.removeEventListener('keyup',ku); };
-}
-
-/* ============================================================
-   BOXEO · 5 rounds · luchadores propios (sin imagenes externas)
-   ------------------------------------------------------------
-   Cada luchador es un personaje generico dibujado con formas
-   + un emoji como cara. No usa imagenes: asi la app pesa poco,
-   carga al instante y no depende de archivos externos.
-
-   Ademas de moverse a los costados, cada boxeador tiene una
-   "profundidad" (variable z): 0 es el fondo del ring y 1 el
-   frente. Un golpe solo pega si estan cerca TAMBIEN en z,
-   asi que moverse en profundidad sirve para esquivar.
-   ============================================================ */
-const BOX_PERSONAJES=[
-  { id:'tigre',  nombre:'El Tigre',   emoji:'🐯', trunk:'#ff8c1a' },
-  { id:'rayo',   nombre:'Rayo Veloz', emoji:'⚡', trunk:'#ffe14d' },
-  { id:'roca',   nombre:'La Roca',    emoji:'🗿', trunk:'#8aa0c8' },
-  { id:'ninja',  nombre:'Ninja',      emoji:'🥷', trunk:'#26e8ff' },
-  { id:'robot',  nombre:'Robotron',   emoji:'🤖', trunk:'#8cff5a' },
-  { id:'dragon', nombre:'Dragón',     emoji:'🐲', trunk:'#ff2e9a' },
-];
-const BOX_LEVELS=[
-  { hp:120, dmg:7,  intv:1500, spd:0.9, block:0.20, ret:0.10 },
-  { hp:155, dmg:9,  intv:1330, spd:1.1, block:0.32, ret:0.20 },
-  { hp:195, dmg:12, intv:1160, spd:1.3, block:0.44, ret:0.30 },
-  { hp:240, dmg:15, intv:1010, spd:1.5, block:0.55, ret:0.42 },
-  { hp:290, dmg:18, intv:880,  spd:1.7, block:0.65, ret:0.55 },
-];
-const boxImgs={};
-function loadFace(p){ return { ok:false, emoji:p.emoji }; }  // sin imágenes: usamos emojis propios
-
-function Boxeo(el){
-  BOX_PERSONAJES.forEach(loadFace);
-  let chosen=null;
-  selectScreen();
-
-  function selectScreen(){
-    if(cleanup){ cleanup(); cleanup=null; }
-    el.innerHTML=`<h2>🥊 Boxeo</h2><p class="lead">Elegí tu personaje y ganá los 5 rounds.</p><div class="box-pick" id="boxPick"></div>`;
-    const grid=el.querySelector('#boxPick');
-    grid.innerHTML=BOX_PERSONAJES.map(p=>`
-      <div class="box-card" data-id="${p.id}">
-        <div class="box-face"><div class="box-ph">${p.emoji}</div></div></div>
-        <div class="box-nm">${p.nombre}</div></div>`).join('');
-    grid.querySelectorAll('.box-card').forEach(c=>c.onclick=()=>startFight(c.dataset.id,1));
-  }
-
-  function startFight(id, level){
-    if(cleanup){ cleanup(); cleanup=null; }
-    chosen=id;
-    const cfg=BOX_LEVELS[level-1];
-    const others=BOX_PERSONAJES.filter(p=>p.id!==id);
-    const opp=others[(level-1)%others.length];
-    const me=BOX_PERSONAJES.find(p=>p.id===id);
-    const meFace=loadFace(me), oppFace=loadFace(opp);
-
-    el.innerHTML=`<h2>🥊 Boxeo</h2>
-      <div class="hud"><span class="lv">Round ${level}/5</span><span>${me.nombre} vs ${opp.nombre}</span></div>
-      <canvas id="boxCanvas" width="300" height="340"></canvas>
-      <div class="lr" style="margin-top:12px"><button class="btn" id="bxL">◀</button><button class="btn" id="bxU">▲</button><button class="btn" id="bxD">▼</button><button class="btn" id="bxR">▶</button></div>
-      <div class="lr" style="margin-top:8px"><button class="btn danger" id="bxP">🥊 Golpe</button><button class="btn alt" id="bxB">🛡️ Bloqueo</button></div>
-      <div class="banner" id="bxBanner"></div>`;
-    const cv=el.querySelector('#boxCanvas'), ctx=cv.getContext('2d'); const W=cv.width,H=cv.height;
-
-    // z = profundidad (0 = fondo del ring, 1 = frente). Sirve para esquivar.
-    let pHP=cfg.hp, oHP=cfg.hp, px=95, ox=210, pz=0.5, oz=0.5;
-    let moveL=false, moveR=false, moveU=false, moveD=false, blocking=false;
-    let pPunch=0, pCd=0, pHurt=0, oHurt=0, oBlock=0, over=false, raf, last=performance.now(), pow=null;
-    let oState='idle', oT=cfg.intv, oPunch=0, oTargetZ=0.5;
-
-    const floorY = z => 250 + z*58;                 // más z = más cerca = más abajo
-    const scaleOf = z => 0.80 + z*0.28;             // más cerca = más grande
-
-    function frame(now){
-      const dt=Math.min(50, now-last); last=now;
-      if(!over){
-        if(moveL) px-=2.6; if(moveR) px+=2.6; px=Math.max(40,Math.min(165,px));
-        if(moveU) pz-=0.022; if(moveD) pz+=0.022; pz=Math.max(0,Math.min(1,pz));
-        if(pCd>0) pCd-=dt; if(pPunch>0) pPunch-=dt; if(pHurt>0) pHurt-=dt; if(oHurt>0) oHurt-=dt; if(oBlock>0) oBlock-=dt;
-
-        oT-=dt;
-        const dist=ox-px, dz=Math.abs(oz-pz);
-
-        if(oState==='idle'){
-          if(dist>96) ox-=cfg.spd*(dt/16.7); else if(dist<70) ox+=cfg.spd*(dt/16.7);
-          ox=Math.max(125,Math.min(262,ox));
-          // sigue al jugador en profundidad, con algo de retraso
-          if(Math.abs(oz-oTargetZ)<0.04) oTargetZ = pz + (Math.random()-0.5)*0.35;
-          oTargetZ=Math.max(0,Math.min(1,oTargetZ));
-          oz += Math.sign(oTargetZ-oz)*Math.min(0.012, Math.abs(oTargetZ-oz));
-          if(oT<=0){ oState='windup'; oT=420; }
-        } else if(oState==='windup'){
-          if(oT<=0){
-            oState='punch'; oPunch=220;
-            const alcanza = (ox-px)<98 && Math.abs(oz-pz)<0.28;   // hay que estar alineado en profundidad
-            if(alcanza){
-              if(blocking){ pow={x:(px+ox)/2,y:floorY(pz)-96,t:300,txt:'BLOCK'}; }
-              else { pHP-=cfg.dmg; pHurt=260; pow={x:(px+ox)/2,y:floorY(pz)-96,t:320,txt:'¡AY!'}; if(pHP<=0){ pHP=0; lose(); } }
-            } else { pow={x:(px+ox)/2,y:floorY(pz)-96,t:280,txt:'¡FALLÓ!'}; }
-          }
-        } else if(oState==='punch'){
-          oPunch-=dt; if(oPunch<=0){ oState='idle'; oT=cfg.intv; }
-        }
-        if(pow){ pow.t-=dt; if(pow.t<=0) pow=null; }
-      }
-      draw(); raf=requestAnimationFrame(frame);
-    }
-
-    function punch(){
-      if(over||pCd>0||blocking) return;
-      pPunch=220; pCd=330;
-      const alcanza = (ox-px)<98 && Math.abs(oz-pz)<0.28;
-      if(!alcanza){ pow={x:(px+ox)/2,y:floorY(pz)-96,t:260,txt:'AIRE'}; return; }
-      // el rival puede cubrirse o contraatacar
-      if(Math.random()<cfg.block){
-        oBlock=320; pow={x:(px+ox)/2,y:floorY(oz)-96,t:300,txt:'CUBRE'};
-        if(Math.random()<cfg.ret && !blocking){                       // contragolpe
-          setTimeout(()=>{ if(over)return; pHP-=Math.round(cfg.dmg*0.7); pHurt=240;
-            pow={x:(px+ox)/2,y:floorY(pz)-96,t:300,txt:'¡CONTRA!'}; if(pHP<=0){ pHP=0; lose(); } },300);
-        }
-      } else {
-        oHP-=11; oHurt=240; ox=Math.min(262,ox+9);
-        pow={x:(px+ox)/2,y:floorY(oz)-96,t:320,txt:'¡POW!'};
-        if(oHP<=0){ oHP=0; win(); }
-      }
-    }
-    function win(){ over=true; awardLevel('boxeo', level); Fiesta.guardarPuntaje('boxeo', level*100, level); burst(); const bn=el.querySelector('#bxBanner');
-      if(level<5){ bn.innerHTML=`¡Ganaste el round ${level}! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Siguiente round ▶'; b.onclick=()=>startFight(chosen,level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
-      else bn.innerHTML=`🏆 ¡Campeón del Boxeo! 5 ⭐`; }
-    function lose(){ over=true; const bn=el.querySelector('#bxBanner'); bn.innerHTML=`<span style="color:var(--magenta)">¡Te noquearon! 🥴</span>`;
-      const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar round'; b.onclick=()=>startFight(chosen,level); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
-
-    function hpBar(x,w,hp,max,color){ ctx.fillStyle='#0a0416'; rr(ctx,x,12,w,13,6); ctx.fill(); ctx.fillStyle=color; rr(ctx,x,12,Math.max(0,w*hp/max),13,6); ctx.fill(); }
-
-    function drawBoxer(cx, z, face, facing, punchExt, hurt, trunk, guard){
-      const s=scaleOf(z), y=floorY(z), bob=Math.sin(Date.now()/200)*2*s;
-      const lean = hurt>0 ? -facing*7*s : 0;
-      ctx.save(); ctx.translate(cx+lean, y); ctx.scale(s,s);
-      // sombra
-      ctx.fillStyle='rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(0,2,26,7,0,0,7); ctx.fill();
-      // piernas + botas
-      ctx.fillStyle='#2b1f47'; rr(ctx,-14,-46,11,46,4); ctx.fill(); rr(ctx,3,-46,11,46,4); ctx.fill();
-      ctx.fillStyle='#f0f0f5'; rr(ctx,-15,-9,13,9,3); ctx.fill(); rr(ctx,2,-9,13,9,3); ctx.fill();
-      // brazo trasero
-      ctx.strokeStyle='#e8b48a'; ctx.lineWidth=9; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(0,-84); ctx.lineTo(-facing*14,-62); ctx.stroke();
-      ctx.fillStyle='#a3162c'; ctx.beginPath(); ctx.arc(-facing*14,-62,9,0,7); ctx.fill();
-      // short
-      ctx.fillStyle=trunk; rr(ctx,-19,-92,38,48,11); ctx.fill();
-      ctx.fillStyle='rgba(255,255,255,.35)'; rr(ctx,-19,-70,38,5,2); ctx.fill();   // elástico
-      // torso
-      ctx.fillStyle='#e8b48a'; rr(ctx,-17,-104,34,26,10); ctx.fill();
-      ctx.fillStyle='rgba(0,0,0,.10)'; rr(ctx,-11,-101,6,18,3); ctx.fill(); rr(ctx,5,-101,6,18,3); ctx.fill();  // pectorales
-      // cuello
-      ctx.fillStyle='#dda87e'; rr(ctx,-6,-112,12,10,4); ctx.fill();
-      // cabeza (cara del personaje)
-      const hy=-112-bob;
-      if(face && face.ok){ const nat=face.img.naturalWidth/(face.img.naturalHeight||1); const hh=64, ww=Math.max(46,Math.min(78,hh*nat));
-        ctx.drawImage(face.img, -ww/2, hy-hh, ww, hh); }
-      else { ctx.font='48px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(face&&face.emoji?face.emoji:'🙂', 0, hy-26); }
-      // brazo delantero: guardia o golpe
-      if(guard){
-        ctx.strokeStyle='#e8b48a'; ctx.lineWidth=9;
-        ctx.beginPath(); ctx.moveTo(0,-84); ctx.lineTo(facing*13,-92); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(0,-72); ctx.lineTo(facing*13,-70); ctx.stroke();
-        ctx.fillStyle='#e21e3a'; ctx.beginPath(); ctx.arc(facing*13,-98,11,0,7); ctx.fill();
-        ctx.beginPath(); ctx.arc(facing*13,-74,11,0,7); ctx.fill();
-      } else {
-        const reach=facing*(19+Math.max(0,punchExt)*50);
-        ctx.strokeStyle='#e8b48a'; ctx.lineWidth=10; ctx.beginPath(); ctx.moveTo(0,-82); ctx.lineTo(reach,-70); ctx.stroke();
-        ctx.fillStyle='#e21e3a'; ctx.beginPath(); ctx.arc(reach,-70,11,0,7); ctx.fill();
-        ctx.fillStyle='rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(reach-3,-73,4,0,7); ctx.fill();
-      }
-      ctx.restore();
-    }
-
-    function draw(){
-      // ring
-      ctx.fillStyle='#101c33'; ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#1b2c4d'; ctx.beginPath(); ctx.moveTo(20,238); ctx.lineTo(W-20,238); ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath(); ctx.fill();
-      ctx.fillStyle='#16233d'; ctx.fillRect(0,232,W,8);
-      // cuerdas del fondo
-      ['#ff2e9a','#ffe14d','#26e8ff'].forEach((c,i)=>{ ctx.strokeStyle=c; ctx.lineWidth=3; ctx.globalAlpha=.55;
-        ctx.beginPath(); ctx.moveTo(0,120+i*38); ctx.lineTo(W,120+i*38); ctx.stroke(); ctx.globalAlpha=1; });
-      // postes
-      ctx.fillStyle='#3a2a5a'; ctx.fillRect(14,110,10,132); ctx.fillRect(W-24,110,10,132);
-      // barras de vida
-      hpBar(10,120,pHP,cfg.hp,'#8cff5a'); hpBar(W-130,120,oHP,cfg.hp,'#ff2e9a');
-      // dibujar el de atrás primero (menor z)
-      const meG=blocking, opG=(oBlock>0)||oState==='windup';
-      const drawMe=()=>drawBoxer(px,pz,meFace,1,pPunch>0?1:0,pHurt,me.trunk,meG);
-      const drawOp=()=>drawBoxer(ox,oz,oppFace,-1,oState==='punch'?1:0,oHurt,opp.trunk,opG);
-      if(pz<=oz){ drawMe(); drawOp(); } else { drawOp(); drawMe(); }
-      if(oState==='windup'){ ctx.fillStyle='#ffe14d'; ctx.font='700 22px "Baloo 2",serif'; ctx.textAlign='center'; ctx.fillText('¡!', ox, floorY(oz)-172); }
-      if(pow){ ctx.font='700 24px "Baloo 2",serif'; ctx.textAlign='center';
-        ctx.fillStyle = pow.txt==='¡POW!'?'#ffe14d' : pow.txt==='BLOCK'?'#26e8ff' : pow.txt==='CUBRE'?'#c9a9e8' : pow.txt==='¡CONTRA!'?'#ff2e9a' : '#8aa0c8';
-        ctx.fillText(pow.txt,pow.x,pow.y); }
-    }
-
-    const bind=(id,set)=>{ const b=el.querySelector(id); b.addEventListener('contextmenu',e=>e.preventDefault()); b.addEventListener('pointerdown',e=>{e.preventDefault();set(true);}); ['pointerup','pointerleave','pointercancel'].forEach(ev=>b.addEventListener(ev,()=>set(false))); };
-    bind('#bxL',v=>moveL=v); bind('#bxR',v=>moveR=v); bind('#bxU',v=>moveU=v); bind('#bxD',v=>moveD=v); bind('#bxB',v=>blocking=v);
-    el.querySelector('#bxP').addEventListener('pointerdown',e=>{e.preventDefault();punch();});
-    function kd(e){ if(e.key==='ArrowLeft'||e.key==='a')moveL=true; if(e.key==='ArrowRight'||e.key==='d')moveR=true;
-      if(e.key==='ArrowUp'||e.key==='w'){e.preventDefault();moveU=true;} if(e.key==='ArrowDown'||e.key==='s'){e.preventDefault();moveD=true;}
-      if(e.key==='Shift')blocking=true; if(e.key===' '){e.preventDefault();punch();} }
-    function ku(e){ if(e.key==='ArrowLeft'||e.key==='a')moveL=false; if(e.key==='ArrowRight'||e.key==='d')moveR=false;
-      if(e.key==='ArrowUp'||e.key==='w')moveU=false; if(e.key==='ArrowDown'||e.key==='s')moveD=false; if(e.key==='Shift')blocking=false; }
-    document.addEventListener('keydown',kd); document.addEventListener('keyup',ku);
-    raf=requestAnimationFrame(frame);
-    cleanup=()=>{ if(raf) cancelAnimationFrame(raf); document.removeEventListener('keydown',kd); document.removeEventListener('keyup',ku); };
-  }
-}
-
-/* ============================================================
-   TA-TE-TI
-   ============================================================ */
-function Tateti(el){
-  const P='🦁', C='⭕'; let b=Array(9).fill(''), over=false;
-  el.innerHTML=`<h2>⭕ Ta-Te-Ti</h2><p class="lead">Vos sos 🦁, la compu es ⭕.</p>
-    <div class="ttt-grid" id="tGrid"></div><p class="center" id="tMsg" style="font-weight:800;min-height:26px"></p>
-    <div class="center"><button class="btn alt" id="tReset">Jugar de nuevo</button></div>`;
-  const grid=el.querySelector('#tGrid'), msg=el.querySelector('#tMsg');
-  b.forEach((_,i)=>{ const c=document.createElement('div'); c.className='ttt-cell'; c.onclick=()=>play(i); grid.appendChild(c); });
-  el.querySelector('#tReset').onclick=()=>Tateti(el);
-  const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
-  function winner(bd){ for(const[a,c,d]of LINES) if(bd[a]&&bd[a]===bd[c]&&bd[a]===bd[d]) return bd[a]; return null; }
-  function render(){ grid.childNodes.forEach((c,i)=>c.textContent=b[i]); }
-  function play(i){ if(over||b[i])return; b[i]=P; render(); if(check())return; const m=cpu(); if(m>-1){ b[m]=C; render(); check(); } }
-  function check(){ const w=winner(b);
-    if(w){ over=true; if(w===P){ msg.innerHTML='<span style="color:var(--lime)">¡Ganaste! 🎉</span>'; Scores.data.tttW++; Scores.save(); checkPremios(); burst(); }
-      else{ msg.innerHTML='<span style="color:var(--magenta)">Ganó la compu 🤖</span>'; Scores.data.tttL++; Scores.save(); } return true; }
-    if(b.every(x=>x)){ over=true; msg.textContent='¡Empate! 🤝'; Scores.data.tttD++; Scores.save(); return true; } return false; }
-  function cpu(){ const find=w=>{ for(const[a,c,d]of LINES){ const l=[b[a],b[c],b[d]]; if(l.filter(x=>x===w).length===2&&l.includes('')) return [a,c,d][l.indexOf('')]; } return -1; };
-    let m=find(C); if(m>-1)return m; m=find(P); if(m>-1)return m; if(!b[4])return 4;
-    const cor=[0,2,6,8].filter(i=>!b[i]); if(cor.length)return cor[(Math.random()*cor.length)|0];
-    const fr=b.map((x,i)=>x?-1:i).filter(i=>i>-1); return fr.length?fr[(Math.random()*fr.length)|0]:-1; }
-  render();
 }
 
 /* ============================================================
@@ -997,7 +995,7 @@ function Trivia(el){
     if(locked)return; locked=true;
     const nodes=qOpts.querySelectorAll('.tri-opt');
     nodes[ok].classList.add('ok');
-    const acerto=(idx===ok);
+    const acerto=(idx===ok); Sonido.play(acerto?'acierto':'error');
     if(acerto){ score++; aciertosNivel++; el.querySelector('#qScore').textContent=score; }
     else btn.classList.add('no');
     const eraFinDeNivel=((i+1)%PORNIVEL===0);
@@ -1005,7 +1003,7 @@ function Trivia(el){
       if(eraFinDeNivel){
         const nivel=nivelDe(i);
         if(aciertosNivel===PORNIVEL){          // SOLO sube si acertó las 2
-          awardLevel('trivia', nivel); Fiesta.guardarPuntaje('trivia', score*50, nivel); burst();
+          Sonido.play('nivel'); awardLevel('trivia', nivel); Fiesta.guardarPuntaje('trivia', score*50, nivel); burst();
           if(score>(Scores.data.triviaBest||0)){ Scores.data.triviaBest=score; Scores.save(); }
           i++; aciertosNivel=0;
           if(i<TOTAL){
