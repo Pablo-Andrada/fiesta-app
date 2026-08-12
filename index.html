@@ -168,6 +168,26 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 
 
 
+/* ----------------------------------------------------------------
+   CHAT EN VIVO
+   ---------------------------------------------------------------- */
+.chat-caja{ display:flex; flex-direction:column; height:calc(100vh - var(--nav-h) - 200px); min-height:300px }
+.conectados{ display:flex; gap:6px; overflow-x:auto; padding:6px 2px 10px; font-size:12px; font-weight:700; color:var(--muted) }
+.conectados .quien{ flex:0 0 auto; background:var(--panel2); border:2px solid var(--ink); border-radius:999px; padding:3px 10px; white-space:nowrap }
+.mensajes{ flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px 2px }
+.msg{ display:flex; gap:8px; align-items:flex-start; max-width:88% }
+.msg .ava{ font-size:22px; flex:0 0 auto }
+.msg .burbuja{ background:linear-gradient(150deg,var(--panel),var(--panel2)); border:3px solid var(--ink); border-radius:14px; padding:7px 11px; box-shadow:3px 3px 0 rgba(10,4,22,.5) }
+.msg .quien{ font-size:11px; font-weight:800; color:var(--cyan); margin-bottom:1px }
+.msg .texto{ font-size:14px; font-weight:600; line-height:1.3; overflow-wrap:anywhere }
+.msg.mio{ align-self:flex-end; flex-direction:row-reverse }
+.msg.mio .burbuja{ background:linear-gradient(150deg,var(--violet),#7a2fb0) }
+.msg.mio .quien{ color:var(--yellow); text-align:right }
+.chat-form{ display:flex; gap:8px; padding-top:10px }
+.chat-form input{ flex:1; font-family:"Baloo 2"; font-weight:700; font-size:15px; color:var(--text); background:var(--panel2); border:3px solid var(--ink); border-radius:14px; padding:11px 14px; min-width:0 }
+.chat-form input::placeholder{ color:#8b6bb0; font-weight:600 }
+.chat-vacio{ text-align:center; color:var(--muted); font-weight:600; padding:30px 12px; font-size:14px; line-height:1.5 }
+
 #confetti{ position:fixed; inset:0; pointer-events:none; z-index:90 }
 @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important } }
 </style>
@@ -225,6 +245,20 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div class="games" id="grillaJuegos"></div>
   </section>
 
+  <!-- ===== CHAT ===== -->
+  <section class="tab" id="tab-chat">
+    <h2 class="sec-title" style="color:var(--cyan);text-shadow:2px 2px 0 var(--ink),0 0 18px rgba(38,232,255,.55)">💬 CHAT</h2>
+    <p class="sec-sub">Charlá con los demás jugadores</p>
+    <div class="chat-caja">
+      <div class="conectados" id="conectados"></div>
+      <div class="mensajes" id="mensajes"><div class="chat-vacio">Cargando…</div></div>
+      <div class="chat-form">
+        <input id="inpMensaje" placeholder="Escribí algo…" maxlength="200" autocomplete="off">
+        <button class="btn alt" id="btnEnviar">➤</button>
+      </div>
+    </div>
+  </section>
+
   <!-- ===== RANKING ===== -->
   <section class="tab" id="tab-ranking">
     <h2 class="sec-title" style="color:var(--yellow);text-shadow:2px 2px 0 var(--ink),0 0 18px rgba(255,225,77,.55)">🏆 RANKING</h2>
@@ -237,6 +271,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 
 <nav class="tabbar" id="tabbar" style="display:none">
   <button class="active" data-tab="juegos"><span class="ti">🕹️</span>Juegos</button>
+  <button data-tab="chat"><span class="ti">💬</span>Chat</button>
   <button data-tab="ranking"><span class="ti">🏆</span>Ranking</button>
 </nav>
 
@@ -328,6 +363,7 @@ async function entrarAJugar(){
   chip.className   = 'chip ' + (Fiesta.estado.online ? 'on' : 'off');
   if(Fiesta.estado.fiesta?.nombre) document.getElementById('subJuegos').textContent=Fiesta.estado.fiesta.nombre;
   renderJuegos(); burst(160);
+  Fiesta.latido();                     // avisa que entro a la sala
 }
 
 /* Boton para prender / apagar el sonido */
@@ -396,12 +432,105 @@ async function cargarRanking(){
 }
 
 /* ================================================================
+   CHAT EN VIVO
+   ------------------------------------------------------------------
+   - Cada 2 segundos busca mensajes nuevos.
+   - Cada 10 segundos avisa "sigo conectado" (latido).
+   - Al salir avisa que se fue; si era el ultimo, el servidor
+     borra toda la conversacion.
+   ================================================================ */
+let chatTimer=null, latidoTimer=null, ultimoMensaje=null, mensajesEnPantalla=[];
+
+function iniciarChat(){
+  if(chatTimer) return;
+  cargarMensajes(true);
+  refrescarConectados();
+  chatTimer   = setInterval(()=>{ cargarMensajes(false); }, 2000);
+  latidoTimer = setInterval(()=>{ Fiesta.latido(); refrescarConectados(); }, 10000);
+  Fiesta.latido();
+}
+function frenarChat(){
+  if(chatTimer){ clearInterval(chatTimer); chatTimer=null; }
+  if(latidoTimer){ clearInterval(latidoTimer); latidoTimer=null; }
+}
+
+async function cargarMensajes(primeraVez){
+  const cont=document.getElementById('mensajes');
+  if(!Fiesta.estado.online){
+    cont.innerHTML='<div class="chat-vacio">El chat necesita conexión a internet.<br>Los juegos funcionan igual 🎮</div>';
+    return;
+  }
+  const nuevos=await Fiesta.mensajes(primeraVez ? null : ultimoMensaje);
+  if(primeraVez) mensajesEnPantalla=[];
+  if(nuevos.length){
+    mensajesEnPantalla=mensajesEnPantalla.concat(nuevos).slice(-80);
+    ultimoMensaje=nuevos[nuevos.length-1].creado_el;
+    pintarMensajes();
+  } else if(primeraVez){
+    pintarMensajes();
+  }
+}
+
+function pintarMensajes(){
+  const cont=document.getElementById('mensajes');
+  if(!mensajesEnPantalla.length){
+    cont.innerHTML='<div class="chat-vacio">Todavía no habló nadie 👀<br>¡Escribí el primer mensaje!</div>';
+    return;
+  }
+  const abajo=cont.scrollHeight-cont.scrollTop-cont.clientHeight < 60;
+  cont.innerHTML=mensajesEnPantalla.map(m=>{
+    const mio=m.apodo===Fiesta.estado.apodo;
+    return '<div class="msg '+(mio?'mio':'')+'">'+
+      '<div class="ava">'+escapar(m.avatar)+'</div>'+
+      '<div class="burbuja"><div class="quien">'+escapar(m.apodo)+'</div>'+
+      '<div class="texto">'+escapar(m.texto)+'</div></div></div>';
+  }).join('');
+  if(abajo) cont.scrollTop=cont.scrollHeight;
+}
+
+/* Convierte los caracteres especiales en texto plano, para que
+   nadie pueda escribir codigo HTML dentro del chat. */
+function escapar(t){
+  return String(t||'').replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+
+async function refrescarConectados(){
+  const cont=document.getElementById('conectados');
+  if(!cont) return;
+  const lista=await Fiesta.conectados();
+  cont.innerHTML = lista.length
+    ? lista.map(function(c){ return '<span class="quien">'+escapar(c.avatar)+' '+escapar(c.apodo)+'</span>'; }).join('')
+    : '<span class="quien">Solo vos por acá 👀</span>';
+}
+
+async function enviarMensaje(){
+  const inp=document.getElementById('inpMensaje');
+  const texto=inp.value.trim();
+  if(!texto) return;
+  inp.value='';
+  const ok=await Fiesta.enviarMensaje(texto);
+  if(ok){ Sonido.play('tap'); cargarMensajes(false); }
+  else inp.value=texto;
+}
+
+document.getElementById('btnEnviar').onclick=enviarMensaje;
+document.getElementById('inpMensaje').addEventListener('keydown',function(e){
+  if(e.key==='Enter') enviarMensaje();
+});
+
+/* Al cerrar la app avisamos que nos fuimos */
+addEventListener('pagehide', function(){ Fiesta.salirDelChat(); });
+
+/* ================================================================
    NAVEGACION
    ================================================================ */
 function showTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active', t.id==='tab-'+name));
   document.querySelectorAll('.tabbar button').forEach(b=>b.classList.toggle('active', b.dataset.tab===name));
   if(name==='ranking'){ renderFiltros(); cargarRanking(); actualizarSubRanking(); }
+  if(name==='chat') iniciarChat(); else frenarChat();
   if(name==='juegos') renderJuegos();
   scrollTo({top:0,behavior:'smooth'});
 }
@@ -438,7 +567,7 @@ function rr(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,
    LOS JUEGOS
    ================================================================ */
 const MEM_EMOJIS=['🎂','🎈','🎁','🦁','🎮','🍔','🌟','🍕','🚗','🏀','🐶','🐱','🍦','🎸','⚽','🚀','🦖','🍩','🐢','🎯'];
-const MEM_LEVELS=[ {pairs:8,cols:4}, {pairs:10,cols:5}, {pairs:12,cols:6}, {pairs:15,cols:6}, {pairs:18,cols:6} ];
+const MEM_LEVELS=[ {pairs:8,cols:4}, {pairs:12,cols:6}, {pairs:15,cols:6}, {pairs:18,cols:6}, {pairs:21,cols:6} ];
 function Memoria(el){
   let level=1;
   el.innerHTML=`<h2>🃏 Memoria</h2>
@@ -480,11 +609,11 @@ function Memoria(el){
    VIBORITA · 5 niveles · traspasa paredes · (más lenta y fácil)
    ============================================================ */
 const SNAKE_LEVELS=[
-  { meta:14, speed:150, obst:2 },
-  { meta:20, speed:135, obst:5 },
-  { meta:26, speed:122, obst:8 },
-  { meta:32, speed:110, obst:11 },
-  { meta:40, speed:98,  obst:15 },
+  { meta:18, speed:140, obst:3 },
+  { meta:26, speed:126, obst:6 },
+  { meta:34, speed:114, obst:10 },
+  { meta:42, speed:103, obst:14 },
+  { meta:52, speed:92,  obst:18 },
 ];
 function Snake(el){
   el.innerHTML=`<h2>🐍 Viborita</h2>
@@ -553,11 +682,11 @@ function Snake(el){
    AUTITOS · vista DESDE ARRIBA · 5 niveles (más fácil)
    ============================================================ */
 const AUTO_LEVELS=[
-  { meta:18, speed:2.4, spawn:1000 },
-  { meta:26, speed:3.0, spawn:850 },
-  { meta:34, speed:3.6, spawn:720 },
-  { meta:42, speed:4.3, spawn:610 },
-  { meta:52, speed:5.1, spawn:520 },
+  { meta:22, speed:2.7, spawn:900 },
+  { meta:32, speed:3.4, spawn:780 },
+  { meta:42, speed:4.1, spawn:660 },
+  { meta:54, speed:4.9, spawn:560 },
+  { meta:68, speed:5.8, spawn:470 },
 ];
 function Autos(el){
   el.innerHTML=`<h2>🏎️ Autitos</h2>
@@ -569,10 +698,13 @@ function Autos(el){
   const cv=el.querySelector('#autoCanvas'), ctx=cv.getContext('2d');
   const W=cv.width, H=cv.height, LANES=[50,150,250], playerY=H-52;
   const COLORS=['#ff2e9a','#b14bff','#ffe14d','#ff7a1a','#8cff5a'];
-  let level,lane,cars,dodged,alive,done,speed,spawnMs,spawnT,raf,last,roadOff=0,explosionAuto=null;
+  /* Cada tanto aparece un auto BLANCO especial: chocarlo NO te
+     hace perder, sino que suma puntos extra. */
+  const CHANCE_BONUS=0.14;
+  let level,lane,cars,dodged,alive,done,speed,spawnMs,spawnT,raf,last,roadOff=0,explosionAuto=null,bonusAviso=null;
   function startLevel(l){
     level=l; const cfg=AUTO_LEVELS[l-1];
-    lane=1; cars=[]; dodged=0; alive=true; done=false; explosionAuto=null; speed=cfg.speed; spawnMs=cfg.spawn; spawnT=0; last=performance.now();
+    lane=1; cars=[]; dodged=0; alive=true; done=false; explosionAuto=null; bonusAviso=null; speed=cfg.speed; spawnMs=cfg.spawn; spawnT=0; last=performance.now();
     el.querySelector('#aLv').textContent='Nivel '+l+'/5'; el.querySelector('#aMeta').textContent='0/'+cfg.meta; el.querySelector('#aBanner').textContent='';
     if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
   }
@@ -582,12 +714,34 @@ function Autos(el){
       spawnT+=dt; if(spawnT>=spawnMs){ spawnT=0; spawnCar(); }
       const cfg=AUTO_LEVELS[level-1];
       for(let i=cars.length-1;i>=0;i--){ const c=cars[i]; c.y+=speed*(dt/16.7);
-        if(c.lane===lane && Math.abs(c.y-playerY)<36){ crash(); return; }
+        if(c.lane===lane && Math.abs(c.y-playerY)<36){
+          if(c.bonus){
+            // Auto blanco: en vez de chocar, suma puntos extra
+            cars.splice(i,1);
+            dodged+=5;
+            Sonido.play('powerup'); Sonido.vibrar(60);
+            bonusAviso={ x:LANES[c.lane], y:playerY-40, t:800 };
+            el.querySelector('#aMeta').textContent=dodged+'/'+cfg.meta;
+            if(dodged>=cfg.meta){ levelUp(); return; }
+            continue;
+          }
+          crash(); return;
+        }
         if(c.y>H+34){ cars.splice(i,1); dodged++; el.querySelector('#aMeta').textContent=dodged+'/'+cfg.meta; if(dodged>=cfg.meta){ levelUp(); return; } } }
     }
     draw(); raf=requestAnimationFrame(frame);
   }
-  function spawnCar(){ const ln=(Math.random()*3)|0; if(cars.some(c=>c.lane===ln && c.y<60)) return; cars.push({ lane:ln, y:-40, color:COLORS[(Math.random()*COLORS.length)|0] }); }
+  function spawnCar(){
+    const ln=(Math.random()*3)|0;
+    if(cars.some(function(c){ return c.lane===ln && c.y<60; })) return;
+    const bonus = Math.random()<CHANCE_BONUS;
+    cars.push({
+      lane:ln, y:-40,
+      color: bonus ? '#ffffff' : COLORS[(Math.random()*COLORS.length)|0],
+      bonus: bonus,
+      brillo: 0,
+    });
+  }
   function carDraw(cx,cy,color,isPlayer){
     // Auto visto DESDE ARRIBA. Mas chico y con mas detalle que antes.
     const w=34,h=58, top=cy-h/2, dir=isPlayer?-1:1;   // dir -1 = mira arriba
@@ -674,7 +828,37 @@ function Autos(el){
     ctx.fillStyle='#0a0416'; ctx.fillRect(0,0,6,H); ctx.fillRect(W-6,0,6,H);
     roadOff=(roadOff+speed*2)%40; ctx.strokeStyle='rgba(255,225,77,.5)'; ctx.lineWidth=4; ctx.setLineDash([20,20]); ctx.lineDashOffset=-roadOff;
     [100,200].forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }); ctx.setLineDash([]);
-    cars.forEach(c=>carDraw(LANES[c.lane], c.y, c.color, false));
+    cars.forEach(function(c){
+      // El auto bonus tiene un resplandor para que se note
+      if(c.bonus){
+        c.brillo+=0.15;
+        ctx.save();
+        ctx.globalAlpha=0.35+Math.abs(Math.sin(c.brillo))*0.35;
+        ctx.fillStyle='#fff8a0';
+        ctx.beginPath(); ctx.arc(LANES[c.lane], c.y, 34, 0, 7); ctx.fill();
+        ctx.restore();
+      }
+      carDraw(LANES[c.lane], c.y, c.color, false);
+      if(c.bonus){
+        ctx.fillStyle='#ffe14d'; ctx.font='700 13px "Baloo 2",serif';
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText('+5', LANES[c.lane], c.y);
+      }
+    });
+
+    // Aviso al agarrar el auto bonus
+    if(bonusAviso){
+      bonusAviso.t-=16;
+      ctx.save();
+      ctx.globalAlpha=Math.max(0,bonusAviso.t/800);
+      ctx.font='700 20px "Baloo 2",serif'; ctx.textAlign='center';
+      ctx.fillStyle='#ffe14d'; ctx.strokeStyle='#0a0416'; ctx.lineWidth=4;
+      const yy=bonusAviso.y-(1-bonusAviso.t/800)*26;
+      ctx.strokeText('+5 BONUS', bonusAviso.x, yy);
+      ctx.fillText('+5 BONUS', bonusAviso.x, yy);
+      ctx.restore();
+      if(bonusAviso.t<=0) bonusAviso=null;
+    }
     if(!explosionAuto) carDraw(LANES[lane], playerY, '#26e8ff', true);
 
     // Explosion al chocar: el emoji crece y se desvanece
@@ -707,7 +891,7 @@ function Autos(el){
 /* ============================================================
    BÁSQUET · 5 niveles · aro más grande
    ============================================================ */
-const BASKET_LEVELS=[ { meta:5, move:0 }, { meta:7, move:1.2 }, { meta:9, move:1.9 }, { meta:11, move:2.7 }, { meta:13, move:3.5 } ];
+const BASKET_LEVELS=[ { meta:6, move:0 }, { meta:9, move:1.5 }, { meta:12, move:2.3 }, { meta:15, move:3.2 }, { meta:18, move:4.2 } ];
 function Basquet(el){
   el.innerHTML=`<h2>🏀 Básquet</h2>
     <p class="lead">Arrastrá la pelota hacia atrás y soltá para lanzar al aro.</p>
@@ -805,28 +989,37 @@ const ALIEN_COLORS=['#3b82f6','#ff8c1a','#ff2e3f','#8cff5a','#ffffff'];
      cadencia= milisegundos entre disparo y disparo (menos = mas rapido)
      dano    = cuanta vida le saca a un bicho por impacto
    ------------------------------------------------------------ */
+/* Cada nave pide MAS cometas que la anterior. Al subir, el
+   contador vuelve a cero. Y si te tocan, BAJAS una nave. */
 const EQUIPOS=[
-  { nombre:'Básica',    color:'#26e8ff', tiros:1, abanico:0,    cadencia:260, dano:1 },
-  { nombre:'Doble',     color:'#8cff5a', tiros:2, abanico:0,    cadencia:240, dano:1 },
-  { nombre:'Triple',    color:'#ffe14d', tiros:3, abanico:0.55, cadencia:220, dano:1 },
-  { nombre:'Plasma',    color:'#ff8c1a', tiros:3, abanico:0.75, cadencia:180, dano:2 },
-  { nombre:'MEGA LÁSER',color:'#ff2e9a', tiros:5, abanico:1.0,  cadencia:150, dano:3 },
+  { nombre:'Básica',    color:'#26e8ff', tiros:1, abanico:0,    cadencia:260, dano:1, cometas:5  },
+  { nombre:'Doble',     color:'#8cff5a', tiros:2, abanico:0,    cadencia:240, dano:1, cometas:10 },
+  { nombre:'Triple',    color:'#ffe14d', tiros:3, abanico:0.55, cadencia:220, dano:1, cometas:20 },
+  { nombre:'Plasma',    color:'#ff8c1a', tiros:3, abanico:0.75, cadencia:180, dano:2, cometas:30 },
+  { nombre:'MEGA LÁSER',color:'#ff2e9a', tiros:5, abanico:1.0,  cadencia:150, dano:3, cometas:0  },
 ];
 
 const NAVE_LEVELS=[
-  { meta:24, espd:1.4, spawn:900, tiroEnemigo:2600 },
-  { meta:36, espd:1.8, spawn:780, tiroEnemigo:2200 },
-  { meta:48, espd:2.2, spawn:670, tiroEnemigo:1900 },
-  { meta:60, espd:2.7, spawn:570, tiroEnemigo:1600 },
-  { meta:72, espd:3.3, spawn:480, tiroEnemigo:1300 },
+  { meta:30, espd:1.6, spawn:820, tiroEnemigo:2200 },
+  { meta:45, espd:2.0, spawn:700, tiroEnemigo:1850 },
+  { meta:60, espd:2.5, spawn:600, tiroEnemigo:1550 },
+  { meta:78, espd:3.0, spawn:510, tiroEnemigo:1300 },
+  { meta:95, espd:3.6, spawn:430, tiroEnemigo:1050 },
 ];
 
 function Nave(el){
   el.innerHTML=`<h2>🚀 Nave</h2>
     <p class="lead">Movete con ◀ ▶ y disparé con 🔥. Pegale a los ☄️ para mejorar tu nave.</p>
     <div class="hud"><span class="lv" id="nLv"></span><span id="nLives">❤️❤️❤️</span><span>👾 <span class="stat" id="nMeta">0</span></span></div>
-    <div class="center" style="font-weight:800;font-size:13px;margin-bottom:6px">
-      Equipo: <span class="stat" id="nEquipo">Básica</span></div>
+    <div class="center" style="font-weight:800;font-size:13px;margin-bottom:4px">
+      Nave: <span class="stat" id="nEquipo">Básica</span></div>
+    <!-- Barra: cuantos cometas faltan para la proxima nave -->
+    <div style="max-width:min(300px,84vw);margin:0 auto 8px">
+      <div style="height:12px;border:2px solid var(--ink);border-radius:999px;background:var(--panel2);overflow:hidden">
+        <div id="nBarra" style="height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),var(--yellow));transition:width .25s"></div>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--muted);font-weight:700;margin-top:2px" id="nCometas">☄️ 0/5</div>
+    </div>
     <canvas id="naveCanvas" width="300" height="380"></canvas>
     <div class="lr"><button class="btn" id="nL">◀</button><button class="btn danger" id="nFire">🔥</button><button class="btn" id="nR">▶</button></div>
     <div class="banner" id="nBanner"></div>`;
@@ -837,38 +1030,73 @@ function Nave(el){
   /* Estrellas del fondo (efecto de movimiento) */
   const stars=Array.from({length:40},()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random()*1.5+0.5}));
 
-  /* ---- FONDO ESPACIAL ----
-     Cuerpos celestes (planetas, lunas) que bajan MUY lento.
-     Al salir de pantalla se regeneran distintos, asi el fondo
-     va variando durante toda la partida. */
+  /* ---- FONDO ESPACIAL EN 3 CAPAS ----
+     Cada capa se mueve a distinta velocidad, y eso genera
+     sensacion de profundidad (las cosas lejanas van mas lento):
+       1) GALAXIAS  -> enormes y lentisimas
+       2) PLANETAS  -> grandes y lentos, con textura rocosa
+       3) ESTRELLAS -> chiquitas y rapidas (ya estaban) */
+
   const PALETA_PLANETAS=[
-    { base:'#ff8c1a', det:'#c25e00' }, { base:'#26e8ff', det:'#0d7f96' },
-    { base:'#b14bff', det:'#6a1fb0' }, { base:'#ff2e9a', det:'#a3005c' },
-    { base:'#8cff5a', det:'#3f9e1c' }, { base:'#ffe14d', det:'#c2a300' },
-    { base:'#8aa0c8', det:'#4f5f80' },
+    { base:'#c96a2b', det:'#6d2e0d', roca:'#8f4718' },
+    { base:'#3fa9d6', det:'#0f4560', roca:'#2b7fa3' },
+    { base:'#a86fd6', det:'#451d68', roca:'#7c4aa8' },
+    { base:'#d64f7a', det:'#6b1433', roca:'#a83259' },
+    { base:'#6fbf5a', det:'#22541a', roca:'#4a9139' },
+    { base:'#d9b23f', det:'#6d550b', roca:'#a8862a' },
+    { base:'#8e9bb5', det:'#394153', roca:'#68738a' },
   ];
+
+  /* Planeta o luna. Mucho mas grandes y rocosos que antes. */
   function nuevoCuerpo(arriba){
     const p=PALETA_PLANETAS[(Math.random()*PALETA_PLANETAS.length)|0];
     const tipo=Math.random();
+    const r=40+Math.random()*60;                  // antes 14-44
     return {
-      x:20+Math.random()*(W-40),
-      y: arriba ? -80-Math.random()*260 : Math.random()*H,
-      r: 14+Math.random()*30,
-      vel: 0.10+Math.random()*0.22,
-      base:p.base, det:p.det,
-      anillo: tipo<0.22,
-      luna:   tipo>0.75,
-      crateres: Array.from({length:4},()=>({ dx:(Math.random()-0.5)*1.2, dy:(Math.random()-0.5)*1.2, r:0.10+Math.random()*0.16 })),
+      x: 10+Math.random()*(W-20),
+      y: arriba ? -r-40-Math.random()*300 : Math.random()*H,
+      r,
+      vel: 0.09+Math.random()*0.15,
+      base:p.base, det:p.det, roca:p.roca,
+      anillo: tipo<0.26,
+      luna:   tipo>0.72,
+      rocas: Array.from({length:8},()=>({
+        dx:(Math.random()-0.5)*1.5, dy:(Math.random()-0.5)*1.5,
+        r:0.08+Math.random()*0.18, op:0.10+Math.random()*0.20,
+        ancho:0.7+Math.random()*0.8,
+      })),
+      crateres: Array.from({length:5},()=>({
+        dx:(Math.random()-0.5)*1.3, dy:(Math.random()-0.5)*1.3, r:0.07+Math.random()*0.12
+      })),
       giro: Math.random()*Math.PI,
     };
   }
-  let cuerpos=Array.from({length:3},()=>nuevoCuerpo(false));
+  let cuerpos=Array.from({length:2},()=>nuevoCuerpo(false));
 
-  let level,kills,lives,shipX,equipo;
+  /* Galaxia espiral: gigante y lentisima (esta lejisimos) */
+  function nuevaGalaxia(arriba){
+    const tonos=[['#b14bff','#26e8ff'],['#ff2e9a','#ffe14d'],['#26e8ff','#8cff5a'],['#ff8c1a','#ff2e9a']];
+    const t=tonos[(Math.random()*tonos.length)|0];
+    return {
+      x: Math.random()*W,
+      y: arriba ? -280-Math.random()*260 : Math.random()*H,
+      r: 130+Math.random()*100,
+      vel: 0.016+Math.random()*0.020,            // casi quietas
+      giro: Math.random()*Math.PI*2,
+      vGiro: 0.0008+Math.random()*0.0010,
+      c1:t[0], c2:t[1],
+      brazos: 2+((Math.random()*2)|0),
+    };
+  }
+  let galaxias=[nuevaGalaxia(false)];
+
+  /* ---- Estado del juego ---- */
+  let level,kills,lives,shipX,equipo,cometasJuntados;
+  let avisoNave=null, avisoNaveT=0;
   let bullets,      // tiros del jugador
       eBullets,     // tiros de los enemigos
       enemies,      // los bichos
-      cometas,      // los cometas que dan mejoras
+      cometas,      // cometas que dan mejoras
       booms;        // explosiones en pantalla
   let alive,done,raf,last,spawnT,shootT,cometaT,lastShot,moveL,moveR,firing,invul;
 
@@ -878,6 +1106,7 @@ function Nave(el){
     kills=0; lives=3; shipX=W/2;
     equipo = (l===1) ? 0 : equipo;        // al reintentar el nivel 1 vuelve a la basica
     if(equipo===undefined) equipo=0;
+    cometasJuntados=0; avisoNave=null; avisoNaveT=0;
     bullets=[]; eBullets=[]; enemies=[]; cometas=[]; booms=[];
     alive=true; done=false; spawnT=0; shootT=0; cometaT=0; lastShot=0; invul=0;
     last=performance.now(); moveL=moveR=firing=false;
@@ -888,7 +1117,18 @@ function Nave(el){
     actualizarEquipo();
     if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
   }
-  function actualizarEquipo(){ el.querySelector('#nEquipo').textContent=EQUIPOS[equipo].nombre; }
+  function actualizarEquipo(){
+    const eq=EQUIPOS[equipo];
+    el.querySelector('#nEquipo').textContent=eq.nombre;
+    const barra=el.querySelector('#nBarra'), txt=el.querySelector('#nCometas');
+    if(!barra||!txt) return;
+    if(equipo>=EQUIPOS.length-1){
+      barra.style.width='100%'; txt.textContent='☄️ ¡NAVE MÁXIMA!';
+    } else {
+      barra.style.width=Math.min(100,(cometasJuntados/eq.cometas)*100)+'%';
+      txt.textContent='☄️ '+cometasJuntados+'/'+eq.cometas;
+    }
+  }
 
   /* ---------- Explosiones ---------- */
   function explotar(x,y,grande){ booms.push({x,y,t:grande?520:380,max:grande?520:380,grande}); }
@@ -897,6 +1137,11 @@ function Nave(el){
   function loseLife(){
     if(invul>0) return;                    // breve invulnerabilidad tras recibir daño
     lives--; invul=1200;
+    // Recibir daño tambien te BAJA una nave
+    if(equipo>0){
+      equipo--; cometasJuntados=0; actualizarEquipo();
+      avisoNave='¡PERDISTE LA NAVE!'; avisoNaveT=1400;
+    }
     Sonido.play('choque'); Sonido.vibrar(120);
     explotar(shipX, shipY, true);
     el.querySelector('#nLives').textContent='❤️'.repeat(Math.max(0,lives))||'💀';
@@ -941,7 +1186,7 @@ function Nave(el){
 
       /* Aparecen cometas (cada 9 segundos aprox) */
       cometaT+=dt;
-      if(cometaT>=9000){ cometaT=0;
+      if(cometaT>=4200){ cometaT=0;
         cometas.push({x:30+Math.random()*(W-60), y:-20, giro:0}); }
 
       /* Los bichos disparan */
@@ -968,8 +1213,15 @@ function Nave(el){
         }
         if(tocado){
           cometas.splice(i,1); explotar(c.x,c.y,false);
-          if(equipo<EQUIPOS.length-1){ equipo++; actualizarEquipo(); Sonido.play('powerup'); Sonido.vibrar(60); }
-          else Sonido.play('acierto');
+          if(equipo<EQUIPOS.length-1){
+            cometasJuntados++;
+            if(cometasJuntados>=EQUIPOS[equipo].cometas){
+              equipo++; cometasJuntados=0;              // sube de nave
+              Sonido.play('powerup'); Sonido.vibrar(90);
+              avisoNave='¡'+EQUIPOS[equipo].nombre.toUpperCase()+'!'; avisoNaveT=1400;
+            } else Sonido.play('comer');
+            actualizarEquipo();
+          } else Sonido.play('acierto');
         }
       }
 
@@ -1061,34 +1313,91 @@ function Nave(el){
     neb2.addColorStop(0,'rgba(38,232,255,.12)'); neb2.addColorStop(1,'transparent');
     ctx.fillStyle=neb2; ctx.fillRect(0,0,W,H);
 
-    /* ---- Planetas y lunas (van bajando muy lento) ---- */
-    cuerpos.forEach((c,i)=>{
+    /* ---- CAPA 1: GALAXIAS (lo mas lejano y lento) ---- */
+    galaxias.forEach(function(g,i){
+      g.y+=g.vel; g.giro+=g.vGiro;
+      if(g.y-g.r>H+140) galaxias[i]=nuevaGalaxia(true);
+      ctx.save(); ctx.translate(g.x,g.y); ctx.rotate(g.giro);
+      // Nucleo brillante
+      const gn=ctx.createRadialGradient(0,0,2, 0,0,g.r*0.30);
+      gn.addColorStop(0,'rgba(255,255,255,.55)');
+      gn.addColorStop(0.45,g.c2); gn.addColorStop(1,'transparent');
+      ctx.globalAlpha=0.34; ctx.fillStyle=gn;
+      ctx.beginPath(); ctx.arc(0,0,g.r*0.30,0,7); ctx.fill();
+      // Brazos espirales, hechos con puntitos que se van abriendo
+      for(let b=0;b<g.brazos;b++){
+        const base=(b/g.brazos)*Math.PI*2;
+        for(let t=0;t<56;t++){
+          const pr=t/56;
+          const ang=base+pr*3.0;
+          const rad=g.r*0.20+pr*g.r*0.78;
+          ctx.globalAlpha=0.30*(1-pr);
+          ctx.fillStyle = t%3===0 ? '#ffffff' : (t%2 ? g.c1 : g.c2);
+          ctx.beginPath();
+          ctx.arc(Math.cos(ang)*rad, Math.sin(ang)*rad*0.42, g.r*0.030*(1-pr*0.5), 0, 7);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha=1; ctx.restore();
+    });
+
+    /* ---- CAPA 2: PLANETAS Y LUNAS (grandes y rocosos) ---- */
+    cuerpos.forEach(function(c,i){
       c.y+=c.vel;
-      if(c.y-c.r>H+40) cuerpos[i]=nuevoCuerpo(true);   // se regenera distinto
+      if(c.y-c.r>H+140) cuerpos[i]=nuevoCuerpo(true);
       ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.giro);
+
       // Anillo de atras
       if(c.anillo){
-        ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=c.r*0.20;
-        ctx.beginPath(); ctx.ellipse(0,0,c.r*1.75,c.r*0.42,0.4,Math.PI,Math.PI*2); ctx.stroke();
+        ctx.strokeStyle='rgba(255,255,255,.18)'; ctx.lineWidth=c.r*0.15;
+        ctx.beginPath(); ctx.ellipse(0,0,c.r*1.85,c.r*0.40,0.4,Math.PI,Math.PI*2); ctx.stroke();
       }
-      // Cuerpo del planeta con sombreado
-      const gp=ctx.createRadialGradient(-c.r*0.35,-c.r*0.35,c.r*0.15, 0,0,c.r);
-      gp.addColorStop(0, c.base); gp.addColorStop(1, c.det);
+
+      // Cuerpo con luz desde arriba-izquierda
+      const gp=ctx.createRadialGradient(-c.r*0.38,-c.r*0.38,c.r*0.10, 0,0,c.r);
+      gp.addColorStop(0, c.base); gp.addColorStop(0.55, c.roca); gp.addColorStop(1, c.det);
       ctx.fillStyle=gp;
       ctx.beginPath(); ctx.arc(0,0,c.r,0,Math.PI*2); ctx.fill();
-      // Crateres (si es luna) o franjas (si es planeta)
+
+      // Textura rocosa (recortada al circulo del planeta)
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0,0,c.r,0,Math.PI*2); ctx.clip();
+      c.rocas.forEach(function(k){
+        ctx.fillStyle='rgba(0,0,0,'+k.op+')';
+        ctx.beginPath();
+        ctx.ellipse(k.dx*c.r*0.62, k.dy*c.r*0.62, c.r*k.r*k.ancho, c.r*k.r, k.dx*2, 0, 7);
+        ctx.fill();
+      });
+      c.rocas.slice(0,4).forEach(function(k){
+        ctx.fillStyle='rgba(255,255,255,.07)';
+        ctx.beginPath();
+        ctx.ellipse(-k.dx*c.r*0.55, -k.dy*c.r*0.55, c.r*k.r*0.7, c.r*k.r*0.5, 0, 0, 7);
+        ctx.fill();
+      });
       if(c.luna){
-        ctx.fillStyle='rgba(0,0,0,.20)';
-        c.crateres.forEach(k=>{ ctx.beginPath(); ctx.arc(k.dx*c.r*0.6, k.dy*c.r*0.6, c.r*k.r, 0, 7); ctx.fill(); });
+        c.crateres.forEach(function(k){
+          const cx=k.dx*c.r*0.62, cy=k.dy*c.r*0.62, cr=c.r*k.r;
+          ctx.fillStyle='rgba(0,0,0,.26)';
+          ctx.beginPath(); ctx.arc(cx,cy,cr,0,7); ctx.fill();
+          ctx.strokeStyle='rgba(255,255,255,.16)'; ctx.lineWidth=Math.max(1,cr*0.16);
+          ctx.beginPath(); ctx.arc(cx,cy,cr,Math.PI*1.1,Math.PI*1.9); ctx.stroke();
+        });
       } else {
-        ctx.fillStyle='rgba(0,0,0,.14)';
-        ctx.beginPath(); ctx.ellipse(0,-c.r*0.25,c.r*0.92,c.r*0.16,0,0,7); ctx.fill();
-        ctx.beginPath(); ctx.ellipse(0, c.r*0.32,c.r*0.80,c.r*0.13,0,0,7); ctx.fill();
+        ctx.fillStyle='rgba(255,255,255,.06)';
+        ctx.beginPath(); ctx.ellipse(0,-c.r*0.30,c.r*0.95,c.r*0.13,0,0,7); ctx.fill();
+        ctx.fillStyle='rgba(0,0,0,.10)';
+        ctx.beginPath(); ctx.ellipse(0, c.r*0.34,c.r*0.85,c.r*0.11,0,0,7); ctx.fill();
       }
+      // Lado oscuro, para dar volumen
+      const gs=ctx.createLinearGradient(-c.r,0,c.r,0);
+      gs.addColorStop(0,'rgba(0,0,0,0)'); gs.addColorStop(0.55,'rgba(0,0,0,0)'); gs.addColorStop(1,'rgba(0,0,0,.45)');
+      ctx.fillStyle=gs; ctx.beginPath(); ctx.arc(0,0,c.r,0,7); ctx.fill();
+      ctx.restore();
+
       // Anillo de adelante
       if(c.anillo){
-        ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=c.r*0.20;
-        ctx.beginPath(); ctx.ellipse(0,0,c.r*1.75,c.r*0.42,0.4,0,Math.PI); ctx.stroke();
+        ctx.strokeStyle='rgba(255,255,255,.30)'; ctx.lineWidth=c.r*0.15;
+        ctx.beginPath(); ctx.ellipse(0,0,c.r*1.85,c.r*0.40,0.4,0,Math.PI); ctx.stroke();
       }
       ctx.restore();
     });
@@ -1128,6 +1437,20 @@ function Nave(el){
 
     /* La nave */
     dibujarNave(shipX, shipY, equipo);
+
+    /* Aviso grande al cambiar de nave */
+    if(avisoNave && avisoNaveT>0){
+      avisoNaveT-=16;
+      ctx.save();
+      ctx.globalAlpha=Math.min(1, avisoNaveT/500);
+      ctx.font='700 19px "Baloo 2",serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle= avisoNave.indexOf('PERDISTE')>=0 ? '#ff2e9a' : '#ffe14d';
+      ctx.strokeStyle='#0a0416'; ctx.lineWidth=5;
+      ctx.strokeText(avisoNave, W/2, H*0.28);
+      ctx.fillText(avisoNave, W/2, H*0.28);
+      ctx.restore();
+      if(avisoNaveT<=0) avisoNave=null;
+    }
 
     /* Explosiones: el emoji crece y se desvanece */
     ctx.textAlign='center'; ctx.textBaseline='middle';
@@ -1179,11 +1502,11 @@ function Nave(el){
    ============================================================ */
 
 const FRUTAS_LEVELS=[
-  { meta:20,  spawn:1100, bomba:0.06, gravedad:0.20 },
-  { meta:35,  spawn:950,  bomba:0.10, gravedad:0.22 },
-  { meta:50,  spawn:800,  bomba:0.14, gravedad:0.24 },
-  { meta:70,  spawn:680,  bomba:0.18, gravedad:0.26 },
-  { meta:95,  spawn:560,  bomba:0.22, gravedad:0.28 },
+  { meta:26,  spawn:1000, bomba:0.08, gravedad:0.20 },
+  { meta:45,  spawn:860,  bomba:0.13, gravedad:0.22 },
+  { meta:65,  spawn:720,  bomba:0.18, gravedad:0.24 },
+  { meta:90,  spawn:610,  bomba:0.23, gravedad:0.26 },
+  { meta:120, spawn:500,  bomba:0.28, gravedad:0.28 },
 ];
 
 /* Cada fruta con su emoji y color de jugo (para las salpicaduras) */
@@ -1513,11 +1836,11 @@ function Frutas(el){
    ============================================================ */
 
 const TOPOS_LEVELS=[
-  { meta:15, intervalo:1100, duracion:1500, bomba:0.08, simultaneos:1 },
-  { meta:25, intervalo:900,  duracion:1250, bomba:0.14, simultaneos:2 },
-  { meta:38, intervalo:750,  duracion:1050, bomba:0.20, simultaneos:2 },
-  { meta:52, intervalo:620,  duracion:880,  bomba:0.26, simultaneos:3 },
-  { meta:70, intervalo:520,  duracion:730,  bomba:0.32, simultaneos:3 },
+  { meta:20, intervalo:1000, duracion:1350, bomba:0.10, simultaneos:2 },
+  { meta:34, intervalo:820,  duracion:1120, bomba:0.17, simultaneos:2 },
+  { meta:50, intervalo:680,  duracion:950,  bomba:0.24, simultaneos:3 },
+  { meta:70, intervalo:560,  duracion:790,  bomba:0.30, simultaneos:3 },
+  { meta:92, intervalo:470,  duracion:660,  bomba:0.36, simultaneos:4 },
 ];
 
 function Topos(el){
@@ -1781,11 +2104,11 @@ function Topos(el){
    ============================================================ */
 
 const RUNNER_LEVELS=[
-  { meta:8,  velocidad:3.0, spawn:2100, pajaros:false },
-  { meta:12, velocidad:3.5, spawn:1900, pajaros:true  },
-  { meta:16, velocidad:4.0, spawn:1700, pajaros:true  },
-  { meta:22, velocidad:4.5, spawn:1550, pajaros:true  },
-  { meta:28, velocidad:5.1, spawn:1400, pajaros:true  },
+  { meta:10, velocidad:3.2, spawn:1950, pajaros:false },
+  { meta:15, velocidad:3.8, spawn:1750, pajaros:true  },
+  { meta:21, velocidad:4.4, spawn:1560, pajaros:true  },
+  { meta:28, velocidad:5.0, spawn:1420, pajaros:true  },
+  { meta:36, velocidad:5.7, spawn:1300, pajaros:true  },
 ];
 
 function Corredor(el){
@@ -2140,11 +2463,11 @@ function Corredor(el){
    ============================================================ */
 
 const RITMO_LEVELS=[
-  { meta:20, velocidad:2.6, intervalo:800, dobles:false },
-  { meta:32, velocidad:3.1, intervalo:680, dobles:false },
-  { meta:45, velocidad:3.6, intervalo:580, dobles:true  },
-  { meta:60, velocidad:4.2, intervalo:490, dobles:true  },
-  { meta:80, velocidad:4.9, intervalo:410, dobles:true  },
+  { meta:26, velocidad:2.9, intervalo:720, dobles:false },
+  { meta:42, velocidad:3.5, intervalo:610, dobles:true  },
+  { meta:60, velocidad:4.1, intervalo:520, dobles:true  },
+  { meta:80, velocidad:4.8, intervalo:440, dobles:true  },
+  { meta:105, velocidad:5.6, intervalo:370, dobles:true },
 ];
 
 /* Las 4 columnas: cada una con su color y su nota musical */
@@ -2424,11 +2747,11 @@ function Ritmo(el){
    ============================================================ */
 
 const TORRE_LEVELS=[
-  { meta:8,  velocidad:1.8, anchoInicial:150 },
-  { meta:12, velocidad:2.4, anchoInicial:140 },
-  { meta:16, velocidad:3.0, anchoInicial:130 },
-  { meta:20, velocidad:3.7, anchoInicial:120 },
-  { meta:25, velocidad:4.5, anchoInicial:110 },
+  { meta:10, velocidad:2.1, anchoInicial:140 },
+  { meta:15, velocidad:2.8, anchoInicial:130 },
+  { meta:20, velocidad:3.5, anchoInicial:120 },
+  { meta:26, velocidad:4.3, anchoInicial:112 },
+  { meta:32, velocidad:5.2, anchoInicial:104 },
 ];
 
 function Torre(el){
@@ -2652,11 +2975,11 @@ function Torre(el){
    ============================================================ */
 
 const SIMON_LEVELS=[
-  { meta:4, ritmo:620 },
-  { meta:6, ritmo:540 },
-  { meta:8, ritmo:460 },
-  { meta:10, ritmo:390 },
-  { meta:12, ritmo:330 },
+  { meta:5, ritmo:580 },
+  { meta:7, ritmo:500 },
+  { meta:9, ritmo:430 },
+  { meta:12, ritmo:370 },
+  { meta:15, ritmo:310 },
 ];
 
 const SIMON_BOTONES=[
@@ -2851,12 +3174,17 @@ function Simon(el){
    PUNTOS: 1 gol comun, 2 si es al angulo (arriba y a los lados).
    ============================================================ */
 
+/* El arquero mejora en tres cosas por nivel:
+     precision = probabilidad de adivinar el lado
+     alcance   = cuanto se estira (llega mas alto)
+     reflejo   = que tan cerca tiene que pasar para atajarla
+   Ademas "lee" la potencia: un remate flojo es mas facil. */
 const PENALES_LEVELS=[
-  { meta:3, precision:0.18, alcance:52, velMira:1.9 },
-  { meta:4, precision:0.32, alcance:60, velMira:2.3 },
-  { meta:5, precision:0.46, alcance:68, velMira:2.7 },
-  { meta:6, precision:0.60, alcance:76, velMira:3.2 },
-  { meta:7, precision:0.74, alcance:84, velMira:3.8 },
+  { meta:3, precision:0.34, alcance:62,  velMira:2.1, reflejo:46 },
+  { meta:4, precision:0.48, alcance:72,  velMira:2.6, reflejo:52 },
+  { meta:5, precision:0.60, alcance:82,  velMira:3.1, reflejo:58 },
+  { meta:6, precision:0.72, alcance:92,  velMira:3.7, reflejo:64 },
+  { meta:7, precision:0.84, alcance:102, velMira:4.4, reflejo:70 },
 ];
 
 function Penales(el){
@@ -2934,17 +3262,22 @@ function Penales(el){
 
     // El arquero decide hacia donde tirarse.
     // "precision" = probabilidad de adivinar el lado correcto.
-    const ladoPelota = destinoX < W/2 ? -1 : (destinoX > W/2 ? 1 : 0);
+    /* ---- DECISION DEL ARQUERO ----
+       Elige el lado segun la probabilidad del nivel. Si el
+       remate es flojo, le resulta mas facil leerlo. */
+    const ladoPelota = destinoX < W*0.42 ? -1 : (destinoX > W*0.58 ? 1 : 0);
+    const plusFlojo = potencia < 45 ? 0.15 : 0;
     let ladoArquero;
-    if(Math.random() < cfg.precision){
-      ladoArquero = ladoPelota;              // adivina
+    if(Math.random() < Math.min(0.95, cfg.precision + plusFlojo)){
+      ladoArquero = ladoPelota;
     } else {
-      const opciones=[-1,0,1].filter(o=>o!==ladoPelota);
+      const opciones=[-1,0,1].filter(function(o){ return o!==ladoPelota; });
       ladoArquero = opciones[(Math.random()*opciones.length)|0];
     }
     arquero.dir=ladoArquero;
     arquero.saltando=true;
-    // Que tan alto llega el arquero (mas nivel, mas alcance)
+    // Tambien estima la altura: a mas nivel, mejor la calcula
+    arquero.alturaObjetivo = destinoY + (1-cfg.precision)*(Math.random()-0.5)*70;
     arquero.alcanceY = ARCO.y + ARCO.h - cfg.alcance;
   }
 
@@ -2962,13 +3295,13 @@ function Penales(el){
       return;
     }
 
-    // Posicion final del arquero (donde llego su mano)
-    const arqX = W/2 + arquero.dir*(ARCO.w*0.32)*arquero.tirado;
-    const arqY = ARCO.y+ARCO.h-16 - (ARCO.h-cfg.alcance)*0.15;
+    // Donde quedaron las manos del arquero
+    const arqX = W/2 + arquero.dir*(ARCO.w*0.34)*arquero.tirado;
+    const arqY = Math.max(arquero.alcanceY, arquero.alturaObjetivo || (ARCO.y+ARCO.h-40));
 
-    // Lo ataja si la pelota paso cerca de sus manos
+    // La ataja si la pelota paso dentro de su alcance
     const distancia = Math.hypot(px-arqX, py-arqY);
-    const atajado = distancia < 40 && py > arquero.alcanceY;
+    const atajado = distancia < cfg.reflejo && py > arquero.alcanceY-10;
 
     if(atajado){
       aviso={ texto:'¡ATAJÓ! 🧤', color:'#ff2e9a', t:1400 };
@@ -3069,57 +3402,95 @@ function Penales(el){
   function dibujarArquero(){
     const cfg=PENALES_LEVELS[level-1];
     const estirado=arquero.tirado;
-    const cx = W/2 + arquero.dir*(ARCO.w*0.32)*estirado;
-    const cy = arquero.y - (arquero.dir!==0 ? 0 : cfg.alcance*0.5*estirado);
-    const inclina = arquero.dir*estirado*0.9;
+    const cx = W/2 + arquero.dir*(ARCO.w*0.34)*estirado;
+    const cy = arquero.y - (arquero.dir===0 ? cfg.alcance*0.55*estirado : 0);
 
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.rotate(inclina);
+    ctx.rotate(arquero.dir*estirado*1.0);
+    ctx.scale(1.35, 1.35);                  // ARQUERO MAS GRANDE
 
-    // Piernas
+    // Piernas y botines
     ctx.strokeStyle='#1b2c4d'; ctx.lineWidth=7; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-8,16); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(3,0);  ctx.lineTo(8,16);  ctx.stroke();
-    // Cuerpo (camiseta de arquero)
-    ctx.fillStyle='#ffe14d';
-    rr(ctx,-11,-24,22,26,7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-9,17); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(3,0);  ctx.lineTo(9,17);  ctx.stroke();
+    ctx.fillStyle='#0a0416';
+    rr(ctx,-14,15,10,5,2); ctx.fill(); rr(ctx,5,15,10,5,2); ctx.fill();
+
+    // Camiseta de arquero (verde fluor) con el numero 23
+    ctx.fillStyle='#8cff5a';
+    rr(ctx,-12,-26,24,28,7); ctx.fill();
     ctx.strokeStyle='#0a0416'; ctx.lineWidth=2; ctx.stroke();
-    // Brazos extendidos hacia arriba y afuera
+    ctx.fillStyle='#0a0416'; ctx.font='700 11px "Baloo 2",serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('23', 0, -13);
+
+    // Brazos extendidos (llegan mas lejos que antes)
     ctx.strokeStyle='#f4c28a'; ctx.lineWidth=6;
-    const brazoAlto = -22 - cfg.alcance*0.35*estirado;
-    ctx.beginPath(); ctx.moveTo(-8,-20); ctx.lineTo(-20, brazoAlto); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(8,-20);  ctx.lineTo(20,  brazoAlto); ctx.stroke();
-    // Guantes
-    ctx.fillStyle='#26e8ff';
-    ctx.beginPath(); ctx.arc(-21, brazoAlto-2, 6, 0, 7); ctx.fill();
-    ctx.beginPath(); ctx.arc(21,  brazoAlto-2, 6, 0, 7); ctx.fill();
+    const brazoAlto = -24 - cfg.alcance*0.42*estirado;
+    ctx.beginPath(); ctx.moveTo(-9,-22); ctx.lineTo(-23, brazoAlto); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(9,-22);  ctx.lineTo(23,  brazoAlto); ctx.stroke();
+    // Guantes grandes
+    ctx.fillStyle='#26e8ff'; ctx.strokeStyle='#0a0416'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(-24, brazoAlto-2, 8, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(24,  brazoAlto-2, 8, 0, 7); ctx.fill(); ctx.stroke();
+
     // Cabeza
-    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-32,8,0,7); ctx.fill();
-    ctx.fillStyle='#3a2a1a'; ctx.beginPath(); ctx.arc(0,-34,8,Math.PI,0); ctx.fill();
+    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-35,9,0,7); ctx.fill();
+    ctx.strokeStyle='#0a0416'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle='#2b1d10'; ctx.beginPath(); ctx.arc(0,-37,9,Math.PI,0); ctx.fill();
+    ctx.fillStyle='#0a0416';
+    ctx.beginPath(); ctx.arc(-3.5,-34,1.4,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(3.5,-34,1.4,0,7); ctx.fill();
+
     ctx.restore();
   }
 
   /* ---------- Dibujo del pateador ---------- */
   function dibujarPateador(){
-    const x=W/2-42, y=H-26;
+    const x=W/2-46, y=H-24;
     const pateando = fase==='pateando' && pelota.t<0.3;
-    ctx.save(); ctx.translate(x,y);
+    ctx.save(); ctx.translate(x,y); ctx.scale(1.2,1.2);
+
     // Piernas
-    ctx.strokeStyle='#2b1f47'; ctx.lineWidth=6; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-4,0); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0,-16);
-    if(pateando) ctx.lineTo(16,-10); else ctx.lineTo(6,0);
+    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-1,-14); ctx.lineTo(-5,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(1,-14);
+    if(pateando) ctx.lineTo(17,-11); else ctx.lineTo(7,0);
     ctx.stroke();
-    // Cuerpo
-    ctx.fillStyle='#26e8ff'; rr(ctx,-8,-34,16,20,6); ctx.fill();
+    // Short negro
+    ctx.fillStyle='#12132a'; rr(ctx,-8,-20,16,10,3); ctx.fill();
+    // Botines
+    ctx.fillStyle='#ffe14d';
+    if(pateando){ rr(ctx,15,-14,10,5,2); ctx.fill(); } else { rr(ctx,5,-3,10,5,2); ctx.fill(); }
+    rr(ctx,-10,-3,10,5,2); ctx.fill();
+
+    // Camiseta CELESTE Y BLANCA a rayas, con el 10
+    ctx.fillStyle='#ffffff';
+    rr(ctx,-9,-36,18,18,5); ctx.fill();
+    ctx.save();
+    ctx.beginPath(); rr(ctx,-9,-36,18,18,5); ctx.clip();
+    ctx.fillStyle='#6ec7f0';
+    [-9,-3,3].forEach(function(fx){ ctx.fillRect(fx,-36,3,18); });
+    ctx.restore();
+    ctx.strokeStyle='#0a0416'; ctx.lineWidth=2; rr(ctx,-9,-36,18,18,5); ctx.stroke();
+    ctx.fillStyle='#0a0416'; ctx.font='700 9px "Baloo 2",serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('10', 0, -26);
+
     // Brazos
-    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=4;
-    ctx.beginPath(); ctx.moveTo(-6,-30); ctx.lineTo(-14,-22); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(6,-30);  ctx.lineTo(13,-24);  ctx.stroke();
+    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=4.5;
+    ctx.beginPath(); ctx.moveTo(-7,-32); ctx.lineTo(-15,-24); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(7,-32);  ctx.lineTo(14,-26);  ctx.stroke();
+
     // Cabeza
-    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-42,7,0,7); ctx.fill();
-    ctx.fillStyle='#3a2a1a'; ctx.beginPath(); ctx.arc(0,-44,7,Math.PI,0); ctx.fill();
+    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-44,8,0,7); ctx.fill();
+    ctx.strokeStyle='#0a0416'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.fillStyle='#2b1d10'; ctx.beginPath(); ctx.arc(0,-46,8,Math.PI,0); ctx.fill();
+    ctx.fillStyle='#0a0416';
+    ctx.beginPath(); ctx.arc(-3,-43,1.3,0,7); ctx.fill();
+    ctx.beginPath(); ctx.arc(3,-43,1.3,0,7); ctx.fill();
+
     ctx.restore();
   }
 

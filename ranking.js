@@ -191,6 +191,99 @@ const Fiesta = (() => {
       }];
     },
 
+    /* ============================================================
+       CHAT EN VIVO
+       ------------------------------------------------------------
+       Solo texto. Cuando se va la ultima persona de la sala, los
+       mensajes se borran solos (lo hace la funcion del servidor
+       limpiar_chat_si_vacio).
+       ============================================================ */
+
+    /* Trae los mensajes mas nuevos (hasta 60) */
+    async mensajes(desde) {
+      if (!estado.online || !estado.fiestaId) return [];
+      try {
+        let ruta = 'mensajes?fiesta_id=eq.' + estado.fiestaId +
+                   '&select=*&order=creado_el.desc&limit=60';
+        if (desde) ruta += '&creado_el=gt.' + encodeURIComponent(desde);
+        const filas = await api(ruta);
+        return (filas || []).reverse();   // los mas viejos primero
+      } catch (e) { return []; }
+    },
+
+    /* Manda un mensaje al chat */
+    async enviarMensaje(texto) {
+      if (!estado.online || !estado.fiestaId) return false;
+      const limpio = (texto || '').trim().slice(0, 200);
+      if (!limpio) return false;
+      try {
+        await api('mensajes', {
+          method: 'POST',
+          prefer: 'return=minimal',
+          body: JSON.stringify({
+            fiesta_id:  estado.fiestaId,
+            jugador_id: estado.jugadorId !== 'local' ? estado.jugadorId : null,
+            apodo:      estado.apodo,
+            avatar:     estado.avatar,
+            texto:      limpio,
+          }),
+        });
+        return true;
+      } catch (e) { return false; }
+    },
+
+    /* Avisa "sigo conectado". Se llama cada pocos segundos. */
+    async latido() {
+      if (!estado.online || !estado.jugadorId || estado.jugadorId === 'local') return;
+      try {
+        await api('presencia?on_conflict=jugador_id', {
+          method: 'POST',
+          prefer: 'resolution=merge-duplicates,return=minimal',
+          body: JSON.stringify({
+            jugador_id: estado.jugadorId,
+            fiesta_id:  estado.fiestaId,
+            apodo:      estado.apodo,
+            avatar:     estado.avatar,
+            visto_el:   new Date().toISOString(),
+          }),
+        });
+      } catch (e) {}
+    },
+
+    /* Lista de quienes estan conectados ahora (ultimos 30 seg) */
+    async conectados() {
+      if (!estado.online || !estado.fiestaId) return [];
+      try {
+        const hace30 = new Date(Date.now() - 30000).toISOString();
+        const filas = await api('presencia?fiesta_id=eq.' + estado.fiestaId +
+                                '&visto_el=gt.' + encodeURIComponent(hace30) +
+                                '&select=apodo,avatar&order=visto_el.desc');
+        return filas || [];
+      } catch (e) { return []; }
+    },
+
+    /* Al salir: se borra la presencia y, si era el ultimo,
+       el servidor borra toda la conversacion. */
+    async salirDelChat() {
+      if (!estado.online || !estado.jugadorId || estado.jugadorId === 'local') return;
+      try {
+        await api('presencia?jugador_id=eq.' + estado.jugadorId, {
+          method: 'DELETE', prefer: 'return=minimal',
+        });
+        // Le pedimos al servidor que limpie si no queda nadie
+        await fetch(SUPABASE_URL + '/rest/v1/rpc/limpiar_chat_si_vacio', {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': 'Bearer ' + SUPABASE_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ p_fiesta: estado.fiestaId }),
+          keepalive: true,          // permite que salga aunque se cierre la pestana
+        });
+      } catch (e) {}
+    },
+
     sesionGuardada() { return local.leer('sesion', null); },
     puntajesLocales() { return local.leer('puntajes', {}); },
   };
