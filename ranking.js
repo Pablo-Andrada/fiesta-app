@@ -15,8 +15,8 @@
 const Fiesta = (() => {
 
   /* ---------- CONFIGURACION (completar con tus datos) -------- */
-  const SUPABASE_URL  = 'https://jqmaedynhvkhhtoehbpd.supabase.co';   // ej: https://abcdefgh.supabase.co
-  const SUPABASE_KEY  = 'sb_publishable_cG8nJktS49STqlraQCuHRQ_kcxWs5GZ';   // la "anon public key"
+  const SUPABASE_URL  = 'https://jqmaedynhvkhhtoehbpd.supabase.co';   // tu Project URL
+  const SUPABASE_KEY  = 'sb_publishable_cG8nJktS49STqlraQCuHRQ_kcxWs5GZ';   // tu anon public key
   /* ----------------------------------------------------------- */
 
   const hayServidor = () => SUPABASE_URL !== '' && SUPABASE_KEY !== '';
@@ -62,8 +62,16 @@ const Fiesta = (() => {
       },
       body: JSON.stringify(parametros),
     });
-    if (!res.ok) throw new Error('error-rpc-' + res.status);
-    return true;
+    if (!res.ok) {
+      // Intentamos leer el motivo que manda el servidor
+      let motivo='';
+      try { const j=await res.json(); motivo=j.message||''; } catch(e){}
+      const err=new Error('error-rpc-' + res.status);
+      err.motivo=motivo;
+      throw err;
+    }
+    const texto = await res.text();
+    return texto ? JSON.parse(texto) : true;
   }
 
   /* ---------- Guardado local (respaldo y sesion) ------------- */
@@ -123,12 +131,17 @@ const Fiesta = (() => {
         return true;
       }
       try {
-        const nuevo = await api('jugadores', {
-          method: 'POST',
-          body: JSON.stringify({ fiesta_id: estado.fiestaId, apodo, avatar }),
+        // Usamos la funcion del servidor: valida los datos y nos
+        // devuelve el token de forma confiable.
+        const r = await rpc('crear_jugador', {
+          p_codigo: estado.fiesta.codigo,
+          p_apodo:  apodo,
+          p_avatar: avatar,
         });
-        estado.jugadorId = nuevo[0].id;
-        estado.token     = nuevo[0].token;
+        const nuevo = Array.isArray(r) ? r[0] : r;
+        if (!nuevo || !nuevo.token) throw new Error('sin-token');
+        estado.jugadorId = nuevo.id;
+        estado.token     = nuevo.token;
         // Guardamos la sesion COMPLETA para reconocerlo la proxima vez
         local.guardar('sesion', {
           apodo, avatar,
@@ -139,11 +152,13 @@ const Fiesta = (() => {
         });
         return true;
       } catch (e) {
-        // Si el apodo ya existe en esta fiesta, avisamos para que
-        // elija otro (no podemos "adoptar" a otro jugador porque
-        // no conocemos su token).
-        if (String(e.message).indexOf('409') >= 0) {
-          return { ok:false, error:'Ese apodo ya está usado en esta fiesta' };
+        // Si el apodo ya existe en esta fiesta, avisamos
+        const motivo = (e.motivo||'') + ' ' + (e.message||'');
+        if (motivo.indexOf('ocupado') >= 0 || motivo.indexOf('409') >= 0) {
+          return { ok:false, error:'Ese apodo ya está usado. Probá con otro.' };
+        }
+        if (motivo.indexOf('corto') >= 0) {
+          return { ok:false, error:'El apodo es muy corto' };
         }
         console.warn('No se pudo registrar online:', e.message);
         estado.online = false; estado.jugadorId = 'local';
@@ -177,13 +192,14 @@ const Fiesta = (() => {
         return r === true;
       }
       try {
-        // Verificamos que el token siga siendo valido
-        const filas = await api('jugadores?token=eq.' + ses.token + '&select=id,apodo,avatar,fiesta_id');
-        if (!filas || !filas.length) return false;
-        if (filas[0].fiesta_id !== estado.fiestaId) return false;   // cambio de fiesta
-        estado.jugadorId = filas[0].id;
-        estado.apodo     = filas[0].apodo;
-        estado.avatar    = filas[0].avatar;
+        // Le preguntamos al servidor a quien corresponde este token
+        const r = await rpc('recuperar_jugador', { p_token: ses.token });
+        const j = Array.isArray(r) ? r[0] : r;
+        if (!j || !j.id) return false;
+        if (j.fiesta_id !== estado.fiestaId) return false;   // es de otra fiesta
+        estado.jugadorId = j.id;
+        estado.apodo     = j.apodo;
+        estado.avatar    = j.avatar;
         estado.token     = ses.token;
         return true;
       } catch (e) { return false; }
