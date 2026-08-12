@@ -153,13 +153,14 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .mem-card{ aspect-ratio:1/1; border-radius:12px; border:3px solid var(--ink); display:flex; align-items:center; justify-content:center; font-size:28px; cursor:pointer; background:linear-gradient(145deg,var(--panel2),var(--violet)); color:transparent; user-select:none; transition:transform .15s }
 .mem-card.show{ background:var(--bg); color:#fff } .mem-card.done{ background:linear-gradient(145deg,#1c7a3a,var(--lime)); color:#fff; cursor:default }
 
-#snakeCanvas,#autoCanvas,#basketCanvas,#naveCanvas,#frutasCanvas,#toposCanvas,#runnerCanvas,#ritmoCanvas,#torreCanvas,#simonCanvas{ display:block; margin:0 auto; background:var(--ink); border:3px solid var(--violet); border-radius:14px; touch-action:none }
+#snakeCanvas,#autoCanvas,#basketCanvas,#naveCanvas,#frutasCanvas,#toposCanvas,#runnerCanvas,#ritmoCanvas,#torreCanvas,#simonCanvas,#penalesCanvas{ display:block; margin:0 auto; background:var(--ink); border:3px solid var(--violet); border-radius:14px; touch-action:none }
 #snakeCanvas{ width:min(300px,86vw); height:min(300px,86vw) }
 #autoCanvas,#basketCanvas,#naveCanvas,#frutasCanvas{ width:min(300px,84vw); height:min(380px,106vw) }
 #toposCanvas{ width:min(300px,84vw); height:min(340px,95vw) }
 #runnerCanvas{ width:min(300px,84vw); height:min(240px,67vw) }
 #ritmoCanvas,#torreCanvas{ width:min(300px,84vw); height:min(400px,112vw) }
 #simonCanvas{ width:min(300px,84vw); height:min(300px,84vw) }
+#penalesCanvas{ width:min(300px,84vw); height:min(380px,106vw) }
 .dpad{ display:grid; grid-template-columns:repeat(3,56px); grid-template-rows:repeat(3,56px); gap:6px; justify-content:center; margin:14px auto 0 } .dpad .btn{ padding:0; font-size:22px; border-radius:12px; display:flex; align-items:center; justify-content:center } .dpad .sp{ visibility:hidden }
 .lr{ display:flex; gap:12px; justify-content:center; margin-top:12px } .lr .btn{ font-size:24px; min-width:74px }
 
@@ -263,6 +264,7 @@ const JUEGOS=[
   { id:'ritmo',    nombre:'Ritmo',    icono:'🎹', fn:()=>Ritmo },
   { id:'torre',    nombre:'Torre',    icono:'🥞', fn:()=>Torre },
   { id:'simon',    nombre:'Simón',    icono:'🧠', fn:()=>Simon },
+  { id:'penales',  nombre:'Penales',  icono:'⚽', fn:()=>Penales },
 ];
 
 const AVATARES=['🦁','🐯','🐸','🐼','🦊','🐵','🦄','🐲','🤖','👽','🦖','🐙','🦈','🐝','🦉','🐨','🍕','⚡'];
@@ -567,10 +569,10 @@ function Autos(el){
   const cv=el.querySelector('#autoCanvas'), ctx=cv.getContext('2d');
   const W=cv.width, H=cv.height, LANES=[50,150,250], playerY=H-52;
   const COLORS=['#ff2e9a','#b14bff','#ffe14d','#ff7a1a','#8cff5a'];
-  let level,lane,cars,dodged,alive,done,speed,spawnMs,spawnT,raf,last,roadOff=0;
+  let level,lane,cars,dodged,alive,done,speed,spawnMs,spawnT,raf,last,roadOff=0,explosionAuto=null;
   function startLevel(l){
     level=l; const cfg=AUTO_LEVELS[l-1];
-    lane=1; cars=[]; dodged=0; alive=true; done=false; speed=cfg.speed; spawnMs=cfg.spawn; spawnT=0; last=performance.now();
+    lane=1; cars=[]; dodged=0; alive=true; done=false; explosionAuto=null; speed=cfg.speed; spawnMs=cfg.spawn; spawnT=0; last=performance.now();
     el.querySelector('#aLv').textContent='Nivel '+l+'/5'; el.querySelector('#aMeta').textContent='0/'+cfg.meta; el.querySelector('#aBanner').textContent='';
     if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
   }
@@ -587,46 +589,108 @@ function Autos(el){
   }
   function spawnCar(){ const ln=(Math.random()*3)|0; if(cars.some(c=>c.lane===ln && c.y<60)) return; cars.push({ lane:ln, y:-40, color:COLORS[(Math.random()*COLORS.length)|0] }); }
   function carDraw(cx,cy,color,isPlayer){
-    const w=44,h=72, top=cy-h/2, dir=isPlayer?-1:1;   // dir: -1 mira arriba, 1 mira abajo
-    // sombra
-    ctx.fillStyle='rgba(0,0,0,.35)'; rr(ctx,cx-w/2+3,top+5,w,h,11); ctx.fill();
-    // ruedas
-    ctx.fillStyle='#15121c';
-    rr(ctx,cx-w/2-3,top+11,7,16,3); ctx.fill();  rr(ctx,cx+w/2-4,top+11,7,16,3); ctx.fill();
-    rr(ctx,cx-w/2-3,top+h-27,7,16,3); ctx.fill(); rr(ctx,cx+w/2-4,top+h-27,7,16,3); ctx.fill();
-    // carrocería
-    ctx.fillStyle=color; rr(ctx,cx-w/2,top,w,h,11); ctx.fill();
-    // brillo lateral
-    ctx.fillStyle='rgba(255,255,255,.18)'; rr(ctx,cx-w/2+3,top+6,6,h-12,3); ctx.fill();
-    ctx.fillStyle='rgba(0,0,0,.14)';       rr(ctx,cx+w/2-9,top+6,6,h-12,3); ctx.fill();
-    // techo / cabina
-    ctx.fillStyle='rgba(10,4,22,.35)'; rr(ctx,cx-w/2+6,top+24,w-12,26,6); ctx.fill();
-    // parabrisas (adelante según dirección) y luneta
-    const frontY = dir===-1 ? top+13 : top+h-25;
-    const backY  = dir===-1 ? top+h-25 : top+13;
-    ctx.fillStyle='#9fd8ff'; rr(ctx,cx-w/2+7,frontY,w-14,13,4); ctx.fill();
-    ctx.fillStyle='rgba(159,216,255,.55)'; rr(ctx,cx-w/2+8,backY,w-16,11,4); ctx.fill();
-    // espejos
-    ctx.fillStyle=color; const my = dir===-1 ? top+26 : top+h-32;
-    rr(ctx,cx-w/2-4,my,5,7,2); ctx.fill(); rr(ctx,cx+w/2-1,my,5,7,2); ctx.fill();
-    // faros / luces traseras
-    const lightY = dir===-1 ? top+3 : top+h-8;
-    ctx.fillStyle= isPlayer? '#fff6c9' : '#ffe9a8';
-    rr(ctx,cx-w/2+7,lightY,10,5,2); ctx.fill(); rr(ctx,cx+w/2-17,lightY,10,5,2); ctx.fill();
-    const tailY = dir===-1 ? top+h-8 : top+3;
-    ctx.fillStyle='#ff3b3b'; rr(ctx,cx-w/2+7,tailY,10,5,2); ctx.fill(); rr(ctx,cx+w/2-17,tailY,10,5,2); ctx.fill();
-    // franja central del jugador
-    if(isPlayer){ ctx.fillStyle='rgba(255,255,255,.55)'; rr(ctx,cx-3,top+6,6,14,2); ctx.fill(); rr(ctx,cx-3,top+h-20,6,14,2); ctx.fill(); }
+    // Auto visto DESDE ARRIBA. Mas chico y con mas detalle que antes.
+    const w=34,h=58, top=cy-h/2, dir=isPlayer?-1:1;   // dir -1 = mira arriba
+    ctx.save();
+
+    // Sombra en el asfalto
+    ctx.fillStyle='rgba(0,0,0,.4)';
+    rr(ctx,cx-w/2+3,top+4,w,h,10); ctx.fill();
+
+    // Ruedas (mas marcadas)
+    ctx.fillStyle='#101018';
+    rr(ctx,cx-w/2-3,top+9,6,13,3); ctx.fill();
+    rr(ctx,cx+w/2-3,top+9,6,13,3); ctx.fill();
+    rr(ctx,cx-w/2-3,top+h-22,6,13,3); ctx.fill();
+    rr(ctx,cx+w/2-3,top+h-22,6,13,3); ctx.fill();
+
+    // Carroceria con degradado (da volumen)
+    const g=ctx.createLinearGradient(cx-w/2,0,cx+w/2,0);
+    g.addColorStop(0, sombra(color,-30));
+    g.addColorStop(0.35, color);
+    g.addColorStop(0.62, brillo(color,40));
+    g.addColorStop(1, sombra(color,-20));
+    ctx.fillStyle=g;
+    rr(ctx,cx-w/2,top,w,h,11); ctx.fill();
+    ctx.strokeStyle='rgba(10,4,22,.65)'; ctx.lineWidth=2; ctx.stroke();
+
+    // Capo y baul mas angostos (forma de auto real)
+    ctx.fillStyle='rgba(0,0,0,.12)';
+    rr(ctx,cx-w/2+3,top+3,w-6,10,5); ctx.fill();
+    rr(ctx,cx-w/2+3,top+h-13,w-6,10,5); ctx.fill();
+
+    // Techo / cabina
+    ctx.fillStyle='rgba(10,4,22,.42)';
+    rr(ctx,cx-w/2+5,top+19,w-10,21,6); ctx.fill();
+
+    // Parabrisas (adelante segun la direccion) y luneta
+    const frenteY = dir===-1 ? top+11 : top+h-21;
+    const atrasY  = dir===-1 ? top+h-21 : top+11;
+    const gp=ctx.createLinearGradient(0,frenteY,0,frenteY+10);
+    gp.addColorStop(0,'#cfefff'); gp.addColorStop(1,'#7fbcd8');
+    ctx.fillStyle=gp; rr(ctx,cx-w/2+6,frenteY,w-12,10,4); ctx.fill();
+    ctx.fillStyle='rgba(159,216,255,.5)'; rr(ctx,cx-w/2+7,atrasY,w-14,9,4); ctx.fill();
+
+    // Espejitos
+    ctx.fillStyle=sombra(color,-15);
+    const my = dir===-1 ? top+22 : top+h-28;
+    rr(ctx,cx-w/2-4,my,4,6,2); ctx.fill();
+    rr(ctx,cx+w/2,my,4,6,2); ctx.fill();
+
+    // Faros y luces traseras
+    const farosY = dir===-1 ? top+2 : top+h-6;
+    ctx.fillStyle='#fff8d0'; ctx.shadowColor='#fff8a0'; ctx.shadowBlur= isPlayer?8:4;
+    rr(ctx,cx-w/2+5,farosY,8,4,2); ctx.fill();
+    rr(ctx,cx+w/2-13,farosY,8,4,2); ctx.fill();
+    ctx.shadowBlur=0;
+    const colaY = dir===-1 ? top+h-6 : top+2;
+    ctx.fillStyle='#ff3b3b';
+    rr(ctx,cx-w/2+5,colaY,8,4,2); ctx.fill();
+    rr(ctx,cx+w/2-13,colaY,8,4,2); ctx.fill();
+
+    // Franjas de carrera solo para el jugador
+    if(isPlayer){
+      ctx.fillStyle='rgba(255,255,255,.6)';
+      rr(ctx,cx-5,top+4,3,12,1); ctx.fill();
+      rr(ctx,cx+2,top+4,3,12,1); ctx.fill();
+      rr(ctx,cx-5,top+h-16,3,12,1); ctx.fill();
+      rr(ctx,cx+2,top+h-16,3,12,1); ctx.fill();
+    }
+    ctx.restore();
   }
+
+  /* Ayudantes para aclarar u oscurecer un color hexadecimal */
+  function brillo(hex,cant){ return mezclar(hex,cant); }
+  function sombra(hex,cant){ return mezclar(hex,cant); }
+  function mezclar(hex,cant){
+    const n=parseInt(hex.slice(1),16);
+    let r=(n>>16)+cant, g=((n>>8)&255)+cant, b=(n&255)+cant;
+    r=Math.max(0,Math.min(255,r)); g=Math.max(0,Math.min(255,g)); b=Math.max(0,Math.min(255,b));
+    return '#'+((r<<16)|(g<<8)|b).toString(16).padStart(6,'0');
+  }
+
   function draw(){
     ctx.fillStyle='#191026'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#0a0416'; ctx.fillRect(0,0,6,H); ctx.fillRect(W-6,0,6,H);
     roadOff=(roadOff+speed*2)%40; ctx.strokeStyle='rgba(255,225,77,.5)'; ctx.lineWidth=4; ctx.setLineDash([20,20]); ctx.lineDashOffset=-roadOff;
     [100,200].forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }); ctx.setLineDash([]);
     cars.forEach(c=>carDraw(LANES[c.lane], c.y, c.color, false));
-    carDraw(LANES[lane], playerY, '#26e8ff', true);
+    if(!explosionAuto) carDraw(LANES[lane], playerY, '#26e8ff', true);
+
+    // Explosion al chocar: el emoji crece y se desvanece
+    if(explosionAuto){
+      explosionAuto.t-=16;
+      const p=1-(explosionAuto.t/900);
+      ctx.save();
+      ctx.globalAlpha=Math.max(0,1-p*0.9);
+      ctx.font=(48+p*40)+'px serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('💥', explosionAuto.x, explosionAuto.y);
+      ctx.restore();
+      if(explosionAuto.t<=0) explosionAuto=null;
+    }
   }
-  function crash(){ alive=false; Sonido.play('choque'); Sonido.vibrar(140); el.querySelector('#aBanner').innerHTML=`<span style="color:var(--magenta)">¡Chocaste! 💥</span>`; addRetry(); }
+  function crash(){ alive=false; explosionAuto={x:LANES[lane], y:playerY, t:900}; Sonido.play('choque'); Sonido.vibrar(140); el.querySelector('#aBanner').innerHTML=`<span style="color:var(--magenta)">¡Chocaste! 💥</span>`; addRetry(); }
   function levelUp(){ Sonido.play('nivel'); awardLevel('autos', level); Fiesta.guardarPuntaje('autos', dodged + (level-1)*50, level); burst(); done=true; const bn=el.querySelector('#aBanner');
     if(level<5){ bn.innerHTML=`¡Nivel ${level} superado! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
     else bn.innerHTML=`🏆 ¡Ganaste los Autitos! 5 ⭐`; }
@@ -671,7 +735,37 @@ function Basquet(el){
     if(level<5){ bn.innerHTML=`¡Nivel ${level} superado! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
     else bn.innerHTML=`🏆 ¡Ganaste el Básquet! 5 ⭐`; }
   function draw(){
-    ctx.fillStyle='#0a0416'; ctx.fillRect(0,0,W,H);
+    /* ---- FONDO DE CANCHA DE BASQUET ---- */
+    // Pared del gimnasio con degradado
+    const gf=ctx.createLinearGradient(0,0,0,H);
+    gf.addColorStop(0,'#1a1030'); gf.addColorStop(0.5,'#241540'); gf.addColorStop(1,'#3d2410');
+    ctx.fillStyle=gf; ctx.fillRect(0,0,W,H);
+
+    // Tribunas arriba (publico)
+    ctx.fillStyle='#140c26'; ctx.fillRect(0,0,W,54);
+    for(let i=0;i<60;i++){
+      ctx.fillStyle=['#ff2e9a','#26e8ff','#ffe14d','#8cff5a','#b14bff'][i%5];
+      ctx.globalAlpha=0.3;
+      ctx.beginPath(); ctx.arc((i*37)%W, 10+((i*17)%36), 3, 0, 7); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+
+    // Piso de parquet (tablas de madera)
+    const pisoY=H*0.52;
+    ctx.fillStyle='#6b4423'; ctx.fillRect(0,pisoY,W,H-pisoY);
+    for(let i=0;i<14;i++){
+      ctx.fillStyle= i%2 ? 'rgba(255,200,120,.07)' : 'rgba(0,0,0,.10)';
+      ctx.fillRect(0, pisoY+i*14, W, 14);
+    }
+    // Lineas de la cancha (en perspectiva)
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,pisoY); ctx.lineTo(W,pisoY); ctx.stroke();
+    // Semicirculo del area
+    ctx.beginPath(); ctx.ellipse(W/2, pisoY+8, 96, 30, 0, 0, Math.PI); ctx.stroke();
+    // Linea de tiro libre
+    ctx.beginPath(); ctx.moveTo(W/2-52, pisoY+52); ctx.lineTo(W/2+52, pisoY+52); ctx.stroke();
+
+    /* ---- EL ARO Y EL TABLERO (igual que antes) ---- */
     ctx.fillStyle='#e7dcff'; ctx.fillRect(hoop.x-2, hoop.y-42, 4, 36); ctx.strokeStyle='#e7dcff'; ctx.lineWidth=3; ctx.strokeRect(hoop.x-32, hoop.y-42, 64, 32);
     ctx.strokeStyle='#ff7a1a'; ctx.lineWidth=4; ctx.beginPath(); ctx.ellipse(hoop.x, hoop.y, RIM, 7, 0, 0, Math.PI*2); ctx.stroke();
     ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1; for(let i=-3;i<=3;i++){ ctx.beginPath(); ctx.moveTo(hoop.x+i*8, hoop.y+4); ctx.lineTo(hoop.x+i*4, hoop.y+22); ctx.stroke(); }
@@ -742,6 +836,33 @@ function Nave(el){
 
   /* Estrellas del fondo (efecto de movimiento) */
   const stars=Array.from({length:40},()=>({x:Math.random()*W,y:Math.random()*H,s:Math.random()*1.5+0.5}));
+
+  /* ---- FONDO ESPACIAL ----
+     Cuerpos celestes (planetas, lunas) que bajan MUY lento.
+     Al salir de pantalla se regeneran distintos, asi el fondo
+     va variando durante toda la partida. */
+  const PALETA_PLANETAS=[
+    { base:'#ff8c1a', det:'#c25e00' }, { base:'#26e8ff', det:'#0d7f96' },
+    { base:'#b14bff', det:'#6a1fb0' }, { base:'#ff2e9a', det:'#a3005c' },
+    { base:'#8cff5a', det:'#3f9e1c' }, { base:'#ffe14d', det:'#c2a300' },
+    { base:'#8aa0c8', det:'#4f5f80' },
+  ];
+  function nuevoCuerpo(arriba){
+    const p=PALETA_PLANETAS[(Math.random()*PALETA_PLANETAS.length)|0];
+    const tipo=Math.random();
+    return {
+      x:20+Math.random()*(W-40),
+      y: arriba ? -80-Math.random()*260 : Math.random()*H,
+      r: 14+Math.random()*30,
+      vel: 0.10+Math.random()*0.22,
+      base:p.base, det:p.det,
+      anillo: tipo<0.22,
+      luna:   tipo>0.75,
+      crateres: Array.from({length:4},()=>({ dx:(Math.random()-0.5)*1.2, dy:(Math.random()-0.5)*1.2, r:0.10+Math.random()*0.16 })),
+      giro: Math.random()*Math.PI,
+    };
+  }
+  let cuerpos=Array.from({length:3},()=>nuevoCuerpo(false));
 
   let level,kills,lives,shipX,equipo;
   let bullets,      // tiros del jugador
@@ -930,7 +1051,47 @@ function Nave(el){
 
   /* ---------- Dibujo general ---------- */
   function draw(){
+    /* ---- FONDO: espacio profundo con nebulosa ---- */
     ctx.fillStyle='#05030f'; ctx.fillRect(0,0,W,H);
+    // Nebulosas suaves de color
+    const neb=ctx.createRadialGradient(W*0.25,H*0.2,10, W*0.25,H*0.2,150);
+    neb.addColorStop(0,'rgba(177,75,255,.16)'); neb.addColorStop(1,'transparent');
+    ctx.fillStyle=neb; ctx.fillRect(0,0,W,H);
+    const neb2=ctx.createRadialGradient(W*0.8,H*0.7,10, W*0.8,H*0.7,170);
+    neb2.addColorStop(0,'rgba(38,232,255,.12)'); neb2.addColorStop(1,'transparent');
+    ctx.fillStyle=neb2; ctx.fillRect(0,0,W,H);
+
+    /* ---- Planetas y lunas (van bajando muy lento) ---- */
+    cuerpos.forEach((c,i)=>{
+      c.y+=c.vel;
+      if(c.y-c.r>H+40) cuerpos[i]=nuevoCuerpo(true);   // se regenera distinto
+      ctx.save(); ctx.translate(c.x,c.y); ctx.rotate(c.giro);
+      // Anillo de atras
+      if(c.anillo){
+        ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=c.r*0.20;
+        ctx.beginPath(); ctx.ellipse(0,0,c.r*1.75,c.r*0.42,0.4,Math.PI,Math.PI*2); ctx.stroke();
+      }
+      // Cuerpo del planeta con sombreado
+      const gp=ctx.createRadialGradient(-c.r*0.35,-c.r*0.35,c.r*0.15, 0,0,c.r);
+      gp.addColorStop(0, c.base); gp.addColorStop(1, c.det);
+      ctx.fillStyle=gp;
+      ctx.beginPath(); ctx.arc(0,0,c.r,0,Math.PI*2); ctx.fill();
+      // Crateres (si es luna) o franjas (si es planeta)
+      if(c.luna){
+        ctx.fillStyle='rgba(0,0,0,.20)';
+        c.crateres.forEach(k=>{ ctx.beginPath(); ctx.arc(k.dx*c.r*0.6, k.dy*c.r*0.6, c.r*k.r, 0, 7); ctx.fill(); });
+      } else {
+        ctx.fillStyle='rgba(0,0,0,.14)';
+        ctx.beginPath(); ctx.ellipse(0,-c.r*0.25,c.r*0.92,c.r*0.16,0,0,7); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(0, c.r*0.32,c.r*0.80,c.r*0.13,0,0,7); ctx.fill();
+      }
+      // Anillo de adelante
+      if(c.anillo){
+        ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=c.r*0.20;
+        ctx.beginPath(); ctx.ellipse(0,0,c.r*1.75,c.r*0.42,0.4,0,Math.PI); ctx.stroke();
+      }
+      ctx.restore();
+    });
 
     /* Estrellas que bajan */
     ctx.fillStyle='rgba(255,255,255,.7)';
@@ -1597,35 +1758,40 @@ function Topos(el){
 }
 
 /* ============================================================
-   CORREDOR · runner infinito (estilo Dino de Chrome)
+   CORREDOR · runner infinito
    ------------------------------------------------------------
    COMO SE JUEGA
-   El personaje corre solo. Hay que SALTAR los obstaculos del
-   piso y AGACHARSE para pasar por debajo de los pajaros.
+   El personaje corre hacia la DERECHA. Hay que SALTAR los
+   obstaculos del piso y AGACHARSE para pasar bajo los pajaros.
 
-   PUNTAJE: 1 punto por metro recorrido + 10 por cada moneda.
+   COMO SE SUBE DE NIVEL
+   Ya NO se sube por metros recorridos (eso era muy rapido).
+   Ahora hay que ESQUIVAR una cantidad de obstaculos: cada uno
+   que dejas atras suma 1. Asi el avance depende de tu habilidad
+   y no de esperar a que pase el tiempo.
 
-   DETALLES INTERESANTES DEL CODIGO:
-   - La "camara" no se mueve: lo que se mueve es el suelo y los
-     obstaculos hacia la izquierda. Es un truco clasico y hace
-     todo mucho mas simple.
-   - El salto usa fisica real: se le da una velocidad hacia
-     arriba y la gravedad hace el resto. Si mantenes apretado,
-     salta un poco mas alto (salto variable).
+   EL PERSONAJE
+   Esta dibujado con formas (no es un emoji), asi puede MOVER
+   LAS PIERNAS Y LOS BRAZOS mientras corre, y mira hacia la
+   derecha, que es hacia donde avanza.
+
+   TRUCO CLASICO: el personaje no se mueve de lugar. Lo que se
+   mueve hacia la izquierda es el suelo y los obstaculos, lo que
+   da la sensacion de que el corre hacia la derecha.
    ============================================================ */
 
 const RUNNER_LEVELS=[
-  { meta:200,  velocidad:4.0, spawn:1500, pajaros:false },
-  { meta:350,  velocidad:4.8, spawn:1300, pajaros:true  },
-  { meta:550,  velocidad:5.6, spawn:1100, pajaros:true  },
-  { meta:800,  velocidad:6.5, spawn:950,  pajaros:true  },
-  { meta:1100, velocidad:7.5, spawn:800,  pajaros:true  },
+  { meta:8,  velocidad:3.0, spawn:2100, pajaros:false },
+  { meta:12, velocidad:3.5, spawn:1900, pajaros:true  },
+  { meta:16, velocidad:4.0, spawn:1700, pajaros:true  },
+  { meta:22, velocidad:4.5, spawn:1550, pajaros:true  },
+  { meta:28, velocidad:5.1, spawn:1400, pajaros:true  },
 ];
 
 function Corredor(el){
   el.innerHTML=`<h2>🏃 Corredor</h2>
     <p class="lead">Tocá para saltar. Mantené apretado ▼ para agacharte.</p>
-    <div class="hud"><span class="lv" id="rLv"></span><span id="rLives">❤️❤️❤️</span><span>📏 <span class="stat" id="rMeta">0</span></span></div>
+    <div class="hud"><span class="lv" id="rLv"></span><span id="rLives">❤️❤️❤️</span><span>🚧 <span class="stat" id="rMeta">0</span></span></div>
     <canvas id="runnerCanvas" width="300" height="240"></canvas>
     <div class="lr"><button class="btn alt" id="rJump" style="flex:2">⬆️ SALTAR</button><button class="btn" id="rDuck">▼</button></div>
     <div class="banner" id="rBanner"></div>`;
@@ -1635,18 +1801,18 @@ function Corredor(el){
   const SUELO=H-38;                 // altura del piso
   const GRAVEDAD=0.62;
 
-  let level, metros, monedas, vidas, alive, done, raf, last;
+  let level, esquivados, monedas, metros, vidas, alive, done, raf, last;
   let jugador, obstaculos, monedasEnPantalla, spawnT, velocidad, suelo0, nubes;
-  let saltando, agachado, tiempoSalto;
+  let saltando, agachado, tiempoSalto, cicloPaso;
 
   /* ---------- Arranque de nivel ---------- */
   function startLevel(l){
     level=l; const cfg=RUNNER_LEVELS[l-1];
-    metros=0; monedas=0; vidas=3; alive=true; done=false;
-    obstaculos=[]; monedasEnPantalla=[]; spawnT=0; suelo0=0;
+    esquivados=0; monedas=0; metros=0; vidas=3; alive=true; done=false;
+    obstaculos=[]; monedasEnPantalla=[]; spawnT=0; suelo0=0; cicloPaso=0;
     velocidad=cfg.velocidad; last=performance.now();
     saltando=false; agachado=false; tiempoSalto=0;
-    jugador={ x:52, y:SUELO, vy:0, enPiso:true };
+    jugador={ x:58, y:SUELO, vy:0, enPiso:true };
     nubes=[{x:80,y:40},{x:210,y:66},{x:300,y:30}];
     el.querySelector('#rLv').textContent='Nivel '+l+'/5';
     el.querySelector('#rMeta').textContent='0/'+cfg.meta;
@@ -1671,8 +1837,7 @@ function Corredor(el){
     vidas--;
     el.querySelector('#rLives').textContent='❤️'.repeat(Math.max(0,vidas))||'💀';
     Sonido.play('choque'); Sonido.vibrar(130);
-    // Limpiamos lo que hay cerca para que no encadene choques
-    obstaculos=obstaculos.filter(o=>o.x>jugador.x+90);
+    obstaculos=obstaculos.filter(o=>o.x>jugador.x+90);   // limpiar lo cercano
     if(vidas<=0){
       alive=false; Sonido.play('gameover');
       const bn=el.querySelector('#rBanner');
@@ -1689,7 +1854,7 @@ function Corredor(el){
     if(done) return;
     done=true;
     awardLevel('corredor', level);
-    Fiesta.guardarPuntaje('corredor', Math.round(metros)+monedas*10+(level-1)*200, level);
+    Fiesta.guardarPuntaje('corredor', esquivados*20 + monedas*10 + (level-1)*150, level);
     burst();
     const bn=el.querySelector('#rBanner');
     if(level<5){
@@ -1709,17 +1874,13 @@ function Corredor(el){
   function crearObstaculo(){
     const cfg=RUNNER_LEVELS[level-1];
     const r=Math.random();
-    if(cfg.pajaros && r<0.3){
-      // Pajaro: viene por el aire, hay que agacharse
-      obstaculos.push({ x:W+30, y:SUELO-52, w:26, h:20, tipo:'pajaro', ala:0 });
+    if(cfg.pajaros && r<0.28){
+      obstaculos.push({ x:W+30, y:SUELO-58, w:26, h:18, tipo:'pajaro', ala:0, contado:false });
     } else if(r<0.55){
-      // Cactus doble (mas ancho)
-      obstaculos.push({ x:W+30, y:SUELO-30, w:30, h:30, tipo:'cactus2' });
+      obstaculos.push({ x:W+30, y:SUELO-30, w:30, h:30, tipo:'cactus2', contado:false });
     } else {
-      // Cactus simple
-      obstaculos.push({ x:W+30, y:SUELO-26, w:18, h:26, tipo:'cactus' });
+      obstaculos.push({ x:W+30, y:SUELO-26, w:18, h:26, tipo:'cactus', contado:false });
     }
-    // A veces aparece una moneda flotando
     if(Math.random()<0.45){
       monedasEnPantalla.push({ x:W+90+Math.random()*60, y:SUELO-58-Math.random()*30, giro:0 });
     }
@@ -1728,23 +1889,21 @@ function Corredor(el){
   /* ---------- Bucle principal ---------- */
   function frame(now){
     const dt=Math.min(50, now-last); last=now;
-    const paso=dt/16.7;                    // para que sea igual en cualquier celular
+    const paso=dt/16.7;
 
     if(alive && !done){
       const cfg=RUNNER_LEVELS[level-1];
 
-      // Avanzar: sumamos metros y movemos el decorado
       metros += velocidad*paso*0.35;
       suelo0 = (suelo0 + velocidad*paso) % 40;
-      el.querySelector('#rMeta').textContent=Math.round(metros)+'/'+cfg.meta;
-      if(metros>=cfg.meta){ levelUp(); return; }
+      // Ciclo de la animacion de correr (mas rapido si va mas rapido)
+      if(jugador.enPiso) cicloPaso += velocidad*paso*0.055;
 
-      // Nubes de fondo (se mueven mas lento: da sensacion de profundidad)
+      // Nubes (mas lentas: dan profundidad)
       nubes.forEach(n=>{ n.x-=velocidad*paso*0.25; if(n.x<-40){ n.x=W+30; n.y=25+Math.random()*50; } });
 
       // Fisica del salto
       if(!jugador.enPiso){
-        // Si mantiene apretado y va subiendo, sube un poco mas (salto variable)
         if(saltando && jugador.vy<0 && tiempoSalto<180){ jugador.vy-=0.22*paso; tiempoSalto+=dt; }
         jugador.vy += GRAVEDAD*paso;
         jugador.y  += jugador.vy*paso;
@@ -1755,16 +1914,24 @@ function Corredor(el){
       spawnT+=dt;
       if(spawnT>=cfg.spawn){ spawnT=0; crearObstaculo(); }
 
-      // Mover obstaculos y detectar choques
+      // Mover obstaculos, contar esquivados y detectar choques
       const alturaJugador = agachado ? 20 : 38;
-      const anchoJugador  = agachado ? 34 : 24;
+      const anchoJugador  = agachado ? 30 : 22;
       for(let i=obstaculos.length-1;i>=0;i--){
         const o=obstaculos[i];
         o.x -= velocidad*paso;
         if(o.tipo==='pajaro') o.ala+=0.25*paso;
+
+        // Si ya lo pasamos, cuenta como esquivado
+        if(!o.contado && o.x+o.w < jugador.x-anchoJugador/2){
+          o.contado=true;
+          esquivados++;
+          el.querySelector('#rMeta').textContent=esquivados+'/'+cfg.meta;
+          if(esquivados>=cfg.meta){ levelUp(); return; }
+        }
+
         if(o.x < -50){ obstaculos.splice(i,1); continue; }
 
-        // Caja del jugador contra caja del obstaculo
         const jx1=jugador.x-anchoJugador/2, jx2=jugador.x+anchoJugador/2;
         const jy1=jugador.y-alturaJugador,  jy2=jugador.y;
         const ox1=o.x, ox2=o.x+o.w, oy1=o.y, oy2=o.y+o.h;
@@ -1791,9 +1958,85 @@ function Corredor(el){
     raf=requestAnimationFrame(frame);
   }
 
-  /* ---------- Dibujo ---------- */
+  /* ------------------------------------------------------------
+     DIBUJO DEL CORREDOR
+     Hecho con formas para poder animar brazos y piernas.
+     Mira hacia la DERECHA (que es hacia donde avanza).
+     El "ciclo" hace que las piernas se muevan como al correr.
+     ------------------------------------------------------------ */
+  function dibujarCorredor(x, y){
+    const piel='#f4c28a', ropa='#26e8ff', pantalon='#2b1f47', zapa='#ffe14d';
+    ctx.save();
+    ctx.translate(x, y);
+
+    if(agachado){
+      // Agachado: cuerpo horizontal, cabeza adelante
+      ctx.fillStyle=pantalon; rr(ctx,-14,-16,24,12,5); ctx.fill();
+      ctx.fillStyle=ropa;     rr(ctx,-4,-19,20,15,6); ctx.fill();
+      ctx.fillStyle=piel;     ctx.beginPath(); ctx.arc(18,-15,8,0,7); ctx.fill();
+      ctx.fillStyle='#3a2a1a';ctx.beginPath(); ctx.arc(15,-19,7,Math.PI,0); ctx.fill();
+      ctx.fillStyle=zapa;     rr(ctx,-16,-5,14,5,2); ctx.fill();
+      ctx.fillStyle=zapa;     rr(ctx,0,-5,14,5,2); ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    // Movimiento de piernas y brazos
+    const s=Math.sin(cicloPaso), c=Math.cos(cicloPaso);
+    const enAire=!jugador.enPiso;
+
+    // Piernas
+    ctx.strokeStyle=pantalon; ctx.lineWidth=6; ctx.lineCap='round';
+    if(enAire){
+      // En el aire: una adelante doblada, otra atras
+      ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(9,-8);  ctx.lineTo(13,-2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(-8,-10); ctx.lineTo(-11,-3); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(s*9, -9); ctx.lineTo(s*13, -1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,-18); ctx.lineTo(-s*9,-9); ctx.lineTo(-s*13,-1); ctx.stroke();
+    }
+    // Zapatillas
+    ctx.fillStyle=zapa;
+    if(enAire){
+      rr(ctx, 10,-4, 10,4, 2); ctx.fill();
+      rr(ctx,-15,-5, 10,4, 2); ctx.fill();
+    } else {
+      rr(ctx, s*13-4,-4, 11,4, 2); ctx.fill();
+      rr(ctx,-s*13-6,-4, 11,4, 2); ctx.fill();
+    }
+
+    // Torso (remera), inclinado hacia adelante
+    ctx.fillStyle=ropa;
+    ctx.beginPath();
+    ctx.moveTo(-7,-19); ctx.lineTo(8,-19); ctx.lineTo(6,-36); ctx.lineTo(-8,-36);
+    ctx.closePath(); ctx.fill();
+
+    // Brazos (se mueven al reves que las piernas)
+    ctx.strokeStyle=piel; ctx.lineWidth=5;
+    if(enAire){
+      ctx.beginPath(); ctx.moveTo(2,-33); ctx.lineTo(12,-38); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-2,-33); ctx.lineTo(-11,-27); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.moveTo(2,-33); ctx.lineTo(-c*10+4,-27); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-2,-33); ctx.lineTo(c*10-4,-28); ctx.stroke();
+    }
+
+    // Cabeza (mirando a la derecha)
+    ctx.fillStyle=piel; ctx.beginPath(); ctx.arc(1,-43,8,0,7); ctx.fill();
+    // Pelo
+    ctx.fillStyle='#3a2a1a';
+    ctx.beginPath(); ctx.arc(0,-45,8,Math.PI*0.9,Math.PI*2.1); ctx.fill();
+    // Ojo hacia adelante
+    ctx.fillStyle='#0a0416'; ctx.beginPath(); ctx.arc(5,-43,1.6,0,7); ctx.fill();
+    // Sonrisa
+    ctx.strokeStyle='#0a0416'; ctx.lineWidth=1.2;
+    ctx.beginPath(); ctx.arc(4,-40,3,0,Math.PI*0.7); ctx.stroke();
+
+    ctx.restore();
+  }
+
+  /* ---------- Dibujo general ---------- */
   function draw(){
-    // Cielo nocturno
     ctx.fillStyle='#12132a'; ctx.fillRect(0,0,W,H);
 
     // Nubes
@@ -1804,7 +2047,7 @@ function Corredor(el){
       ctx.fill();
     });
 
-    // Suelo (linea + rayitas que se mueven)
+    // Suelo
     ctx.strokeStyle='#8cff5a'; ctx.lineWidth=3;
     ctx.beginPath(); ctx.moveTo(0,SUELO+2); ctx.lineTo(W,SUELO+2); ctx.stroke();
     ctx.strokeStyle='rgba(140,255,90,.35)'; ctx.lineWidth=2;
@@ -1816,7 +2059,7 @@ function Corredor(el){
     ctx.textAlign='center'; ctx.textBaseline='middle';
     monedasEnPantalla.forEach(m=>{
       ctx.save(); ctx.translate(m.x,m.y);
-      ctx.scale(Math.abs(Math.cos(m.giro))*0.7+0.3, 1);   // efecto de giro
+      ctx.scale(Math.abs(Math.cos(m.giro))*0.7+0.3, 1);
       ctx.font='20px serif'; ctx.fillText('🪙',0,0);
       ctx.restore();
     });
@@ -1824,56 +2067,46 @@ function Corredor(el){
     // Obstaculos
     obstaculos.forEach(o=>{
       if(o.tipo==='pajaro'){
-        ctx.font='22px serif';
-        ctx.fillText(Math.sin(o.ala)>0?'🦅':'🕊️', o.x+o.w/2, o.y+o.h/2);
+        // Pajaro dibujado, con alas que aletean
+        const cy=o.y+o.h/2, cx=o.x+o.w/2;
+        const ala=Math.sin(o.ala)*8;
+        ctx.fillStyle='#b14bff';
+        ctx.beginPath(); ctx.ellipse(cx,cy,13,7,0,0,7); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx-6,cy-ala-8); ctx.lineTo(cx+7,cy-2); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#ffe14d';
+        ctx.beginPath(); ctx.moveTo(cx-13,cy); ctx.lineTo(cx-20,cy+2); ctx.lineTo(cx-13,cy+4); ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#0a0416'; ctx.beginPath(); ctx.arc(cx-8,cy-2,1.6,0,7); ctx.fill();
       } else {
         ctx.fillStyle='#2fa84f';
         const partes = o.tipo==='cactus2' ? [[0,0,10,o.h],[12,6,9,o.h-6],[22,2,8,o.h-2]] : [[0,0,o.w,o.h]];
         partes.forEach(p=>{
-          ctx.fillRect(o.x+p[0], o.y+p[1], p[2], p[3]);
+          rr(ctx, o.x+p[0], o.y+p[1], p[2], p[3], 3); ctx.fill();
+          ctx.strokeStyle='#0a0416'; ctx.lineWidth=2; ctx.stroke();
         });
-        ctx.strokeStyle='#0a0416'; ctx.lineWidth=2;
-        ctx.strokeRect(o.x, o.y, o.w, o.h);
       }
     });
 
-    // El jugador
-    const paso=Math.floor(Date.now()/90)%2;
-    ctx.save();
-    ctx.translate(jugador.x, jugador.y);
-    ctx.font=(agachado?'26px':'32px')+' serif';
-    ctx.textAlign='center'; ctx.textBaseline='bottom';
-    if(agachado){
-      ctx.fillText('🏃', 0, 6);
-    } else if(!jugador.enPiso){
-      ctx.fillText('🏃', 0, 2);
-    } else {
-      // Pequeño rebote al correr
-      ctx.fillText('🏃', 0, paso? 0 : -3);
-    }
-    ctx.restore();
+    // El corredor
+    dibujarCorredor(jugador.x, jugador.y);
 
-    // Contador de monedas
-    ctx.fillStyle='#ffe14d'; ctx.font='700 14px "Baloo 2",serif';
+    // Contadores
+    ctx.fillStyle='#ffe14d'; ctx.font='700 13px "Baloo 2",serif';
     ctx.textAlign='right'; ctx.textBaseline='top';
-    ctx.fillText('🪙 '+monedas, W-10, 10);
+    ctx.fillText('🪙 '+monedas, W-10, 8);
+    ctx.fillStyle='rgba(255,255,255,.5)';
+    ctx.fillText(Math.round(metros)+' m', W-10, 26);
   }
 
   /* ---------- Controles ---------- */
   const btnJump=el.querySelector('#rJump'), btnDuck=el.querySelector('#rDuck');
   [btnJump,btnDuck].forEach(b=>b.addEventListener('contextmenu',e=>e.preventDefault()));
-
   btnJump.addEventListener('pointerdown',e=>{e.preventDefault(); saltar();});
   btnJump.addEventListener('pointerup',soltarSalto);
   btnJump.addEventListener('pointerleave',soltarSalto);
-
   btnDuck.addEventListener('pointerdown',e=>{e.preventDefault(); agachado=true;});
   ['pointerup','pointerleave','pointercancel'].forEach(ev=>btnDuck.addEventListener(ev,()=>agachado=false));
-
-  // Tocar el canvas tambien salta
   cv.addEventListener('pointerdown',e=>{e.preventDefault(); saltar();});
   cv.addEventListener('pointerup',soltarSalto);
-
   function kd(e){
     if(e.key===' '||e.key==='ArrowUp'||e.key==='w'){ e.preventDefault(); saltar(); }
     if(e.key==='ArrowDown'||e.key==='s'){ e.preventDefault(); agachado=true; }
@@ -2597,6 +2830,419 @@ function Simon(el){
 
   startLevel(1);
   cleanup=()=>{ if(raf) cancelAnimationFrame(raf); limpiarTimers(); };
+}
+
+/* ============================================================
+   PENALES · patear al arco (con arquero que ataja)
+   ------------------------------------------------------------
+   COMO SE JUEGA
+   1) Aparece una MIRA que se mueve sola de lado a lado.
+   2) Tocás una vez para fijar la ALTURA/DIRECCION horizontal.
+   3) Aparece una barra de POTENCIA que sube y baja: tocás de
+      nuevo para definir con cuanta fuerza pateas.
+   4) El jugador patea y el arquero se tira para un lado.
+
+   EL ARQUERO
+   Va mejorando por nivel: en el 1 se tira casi al azar, y en
+   el 5 "adivina" bastante seguido hacia donde va la pelota.
+   Igual siempre queda chance: si la pones en un angulo alto
+   (la telarana), es mucho mas dificil que llegue.
+
+   PUNTOS: 1 gol comun, 2 si es al angulo (arriba y a los lados).
+   ============================================================ */
+
+const PENALES_LEVELS=[
+  { meta:3, precision:0.18, alcance:52, velMira:1.9 },
+  { meta:4, precision:0.32, alcance:60, velMira:2.3 },
+  { meta:5, precision:0.46, alcance:68, velMira:2.7 },
+  { meta:6, precision:0.60, alcance:76, velMira:3.2 },
+  { meta:7, precision:0.74, alcance:84, velMira:3.8 },
+];
+
+function Penales(el){
+  el.innerHTML=`<h2>⚽ Penales</h2>
+    <p class="lead">Tocá para elegir la puntería, y otra vez para la potencia.</p>
+    <div class="hud"><span class="lv" id="pLv"></span><span id="pTiros">Tiros: 5</span><span>⚽ <span class="stat" id="pMeta">0</span></span></div>
+    <canvas id="penalesCanvas" width="300" height="380"></canvas>
+    <div class="lr"><button class="btn alt" id="pShoot" style="flex:1">⚽ PATEAR</button></div>
+    <div class="banner" id="pBanner"></div>`;
+
+  const cv=el.querySelector('#penalesCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+
+  /* Medidas del arco */
+  const ARCO={ x:42, y:78, w:216, h:104 };
+  const PELOTA_Y=H-58;
+
+  let level, goles, tiros, alive, done, raf, last;
+  let fase;            // 'mira' | 'potencia' | 'pateando' | 'resultado'
+  let mira, potencia, potenciaDir, pelota, arquero, aviso;
+
+  /* ---------- Arranque ---------- */
+  function startLevel(l){
+    level=l;
+    goles=0; tiros=5+l; alive=true; done=false;
+    resetTiro();
+    el.querySelector('#pLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#pMeta').textContent='0/'+PENALES_LEVELS[l-1].meta;
+    el.querySelector('#pTiros').textContent='Tiros: '+tiros;
+    el.querySelector('#pBanner').textContent='';
+    last=performance.now();
+    if(raf) cancelAnimationFrame(raf);
+    raf=requestAnimationFrame(frame);
+  }
+
+  /* ---------- Preparar un tiro nuevo ---------- */
+  function resetTiro(){
+    fase='mira';
+    mira={ x:W/2, dir:1, y:ARCO.y+30 };
+    potencia=0; potenciaDir=1;
+    pelota={ x:W/2, y:PELOTA_Y, vx:0, vy:0, escala:1, volando:false };
+    arquero={ x:W/2, y:ARCO.y+ARCO.h-16, tirado:0, dir:0, saltando:false };
+    aviso=null;
+  }
+
+  /* ---------- El jugador toca ---------- */
+  function accion(){
+    if(!alive || done) return;
+    if(fase==='mira'){
+      fase='potencia';
+      Sonido.play('tap');
+    } else if(fase==='potencia'){
+      patear();
+    }
+  }
+
+  /* ---------- Patear ---------- */
+  function patear(){
+    const cfg=PENALES_LEVELS[level-1];
+    fase='pateando';
+    Sonido.play('disparo');
+
+    // La altura del remate depende de la potencia:
+    // poca potencia = rasante, mucha = arriba (y puede irse afuera)
+    const destinoX = mira.x;
+    const alturaFactor = potencia/100;
+    const destinoY = ARCO.y + ARCO.h - alturaFactor*(ARCO.h+22);
+
+    pelota.volando=true;
+    pelota.destinoX=destinoX;
+    pelota.destinoY=destinoY;
+    pelota.t=0;
+    pelota.origenX=pelota.x;
+    pelota.origenY=pelota.y;
+
+    // El arquero decide hacia donde tirarse.
+    // "precision" = probabilidad de adivinar el lado correcto.
+    const ladoPelota = destinoX < W/2 ? -1 : (destinoX > W/2 ? 1 : 0);
+    let ladoArquero;
+    if(Math.random() < cfg.precision){
+      ladoArquero = ladoPelota;              // adivina
+    } else {
+      const opciones=[-1,0,1].filter(o=>o!==ladoPelota);
+      ladoArquero = opciones[(Math.random()*opciones.length)|0];
+    }
+    arquero.dir=ladoArquero;
+    arquero.saltando=true;
+    // Que tan alto llega el arquero (mas nivel, mas alcance)
+    arquero.alcanceY = ARCO.y + ARCO.h - cfg.alcance;
+  }
+
+  /* ---------- Resolver si fue gol ---------- */
+  function resolver(){
+    const cfg=PENALES_LEVELS[level-1];
+    const px=pelota.x, py=pelota.y;
+
+    // Afuera del arco
+    const dentro = px>ARCO.x+8 && px<ARCO.x+ARCO.w-8 && py>ARCO.y && py<ARCO.y+ARCO.h;
+    if(!dentro){
+      aviso={ texto:'¡AFUERA! 😖', color:'#ff8c1a', t:1400 };
+      Sonido.play('error');
+      terminarTiro(false);
+      return;
+    }
+
+    // Posicion final del arquero (donde llego su mano)
+    const arqX = W/2 + arquero.dir*(ARCO.w*0.32)*arquero.tirado;
+    const arqY = ARCO.y+ARCO.h-16 - (ARCO.h-cfg.alcance)*0.15;
+
+    // Lo ataja si la pelota paso cerca de sus manos
+    const distancia = Math.hypot(px-arqX, py-arqY);
+    const atajado = distancia < 40 && py > arquero.alcanceY;
+
+    if(atajado){
+      aviso={ texto:'¡ATAJÓ! 🧤', color:'#ff2e9a', t:1400 };
+      Sonido.play('choque'); Sonido.vibrar(90);
+      terminarTiro(false);
+    } else {
+      // Gol: vale doble si fue al angulo (arriba y a los costados)
+      const alAngulo = py < ARCO.y+38 && (px < ARCO.x+70 || px > ARCO.x+ARCO.w-70);
+      const suma = alAngulo ? 2 : 1;
+      goles += suma;
+      aviso={ texto: alAngulo ? '¡GOLAZO AL ÁNGULO! ⚡' : '¡GOL! ⚽', color:'#8cff5a', t:1400 };
+      Sonido.play(alAngulo ? 'powerup' : 'acierto');
+      el.querySelector('#pMeta').textContent=Math.min(goles,cfg.meta)+'/'+cfg.meta;
+      terminarTiro(true);
+    }
+  }
+
+  function terminarTiro(fueGol){
+    fase='resultado';
+    tiros--;
+    el.querySelector('#pTiros').textContent='Tiros: '+tiros;
+    const cfg=PENALES_LEVELS[level-1];
+
+    setTimeout(()=>{
+      if(done) return;
+      if(goles>=cfg.meta){ levelUp(); return; }
+      if(tiros<=0){
+        alive=false; Sonido.play('gameover');
+        const bn=el.querySelector('#pBanner');
+        bn.innerHTML=`<span style="color:var(--magenta)">Te quedaste sin tiros ⚽</span>`;
+        const b=document.createElement('button');
+        b.className='btn alt mt'; b.textContent='Reintentar nivel';
+        b.onclick=()=>startLevel(level);
+        bn.appendChild(document.createElement('br')); bn.appendChild(b);
+        return;
+      }
+      resetTiro();
+    }, 1500);
+  }
+
+  /* ---------- Pasar de nivel ---------- */
+  function levelUp(){
+    if(done) return;
+    done=true;
+    awardLevel('penales', level);
+    Fiesta.guardarPuntaje('penales', goles*30 + tiros*10 + (level-1)*100, level);
+    burst();
+    const bn=el.querySelector('#pBanner');
+    if(level<5){
+      Sonido.play('nivel');
+      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
+      const b=document.createElement('button');
+      b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
+      b.onclick=()=>startLevel(level+1);
+      bn.appendChild(document.createElement('br')); bn.appendChild(b);
+    } else {
+      Sonido.play('victoria');
+      bn.innerHTML=`🏆 ¡Ganaste los Penales! 5 ⭐`;
+    }
+  }
+
+  /* ---------- Bucle ---------- */
+  function frame(now){
+    const dt=Math.min(50, now-last); last=now;
+    const paso=dt/16.7;
+    const cfg=PENALES_LEVELS[level-1];
+
+    if(alive && !done){
+      if(fase==='mira'){
+        // La mira va y viene por el ancho del arco
+        mira.x += cfg.velMira*mira.dir*paso;
+        if(mira.x>ARCO.x+ARCO.w-14){ mira.x=ARCO.x+ARCO.w-14; mira.dir=-1; }
+        if(mira.x<ARCO.x+14){ mira.x=ARCO.x+14; mira.dir=1; }
+      } else if(fase==='potencia'){
+        // La barra sube y baja
+        potencia += 2.6*potenciaDir*paso;
+        if(potencia>100){ potencia=100; potenciaDir=-1; }
+        if(potencia<0){ potencia=0; potenciaDir=1; }
+      } else if(fase==='pateando'){
+        // La pelota viaja hacia el arco (y se achica: se aleja)
+        pelota.t += 0.032*paso;
+        const t=Math.min(1, pelota.t);
+        pelota.x = pelota.origenX + (pelota.destinoX-pelota.origenX)*t;
+        pelota.y = pelota.origenY + (pelota.destinoY-pelota.origenY)*t;
+        pelota.escala = 1 - t*0.45;
+        // El arquero se estira
+        if(arquero.tirado<1) arquero.tirado=Math.min(1, arquero.tirado+0.07*paso);
+        if(t>=1){ resolver(); }
+      }
+      if(aviso){ aviso.t-=dt; if(aviso.t<=0) aviso=null; }
+    }
+
+    draw();
+    raf=requestAnimationFrame(frame);
+  }
+
+  /* ---------- Dibujo del arquero ---------- */
+  function dibujarArquero(){
+    const cfg=PENALES_LEVELS[level-1];
+    const estirado=arquero.tirado;
+    const cx = W/2 + arquero.dir*(ARCO.w*0.32)*estirado;
+    const cy = arquero.y - (arquero.dir!==0 ? 0 : cfg.alcance*0.5*estirado);
+    const inclina = arquero.dir*estirado*0.9;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(inclina);
+
+    // Piernas
+    ctx.strokeStyle='#1b2c4d'; ctx.lineWidth=7; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-8,16); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(3,0);  ctx.lineTo(8,16);  ctx.stroke();
+    // Cuerpo (camiseta de arquero)
+    ctx.fillStyle='#ffe14d';
+    rr(ctx,-11,-24,22,26,7); ctx.fill();
+    ctx.strokeStyle='#0a0416'; ctx.lineWidth=2; ctx.stroke();
+    // Brazos extendidos hacia arriba y afuera
+    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=6;
+    const brazoAlto = -22 - cfg.alcance*0.35*estirado;
+    ctx.beginPath(); ctx.moveTo(-8,-20); ctx.lineTo(-20, brazoAlto); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(8,-20);  ctx.lineTo(20,  brazoAlto); ctx.stroke();
+    // Guantes
+    ctx.fillStyle='#26e8ff';
+    ctx.beginPath(); ctx.arc(-21, brazoAlto-2, 6, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.arc(21,  brazoAlto-2, 6, 0, 7); ctx.fill();
+    // Cabeza
+    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-32,8,0,7); ctx.fill();
+    ctx.fillStyle='#3a2a1a'; ctx.beginPath(); ctx.arc(0,-34,8,Math.PI,0); ctx.fill();
+    ctx.restore();
+  }
+
+  /* ---------- Dibujo del pateador ---------- */
+  function dibujarPateador(){
+    const x=W/2-42, y=H-26;
+    const pateando = fase==='pateando' && pelota.t<0.3;
+    ctx.save(); ctx.translate(x,y);
+    // Piernas
+    ctx.strokeStyle='#2b1f47'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(0,-16); ctx.lineTo(-4,0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0,-16);
+    if(pateando) ctx.lineTo(16,-10); else ctx.lineTo(6,0);
+    ctx.stroke();
+    // Cuerpo
+    ctx.fillStyle='#26e8ff'; rr(ctx,-8,-34,16,20,6); ctx.fill();
+    // Brazos
+    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=4;
+    ctx.beginPath(); ctx.moveTo(-6,-30); ctx.lineTo(-14,-22); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(6,-30);  ctx.lineTo(13,-24);  ctx.stroke();
+    // Cabeza
+    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-42,7,0,7); ctx.fill();
+    ctx.fillStyle='#3a2a1a'; ctx.beginPath(); ctx.arc(0,-44,7,Math.PI,0); ctx.fill();
+    ctx.restore();
+  }
+
+  /* ---------- Dibujo general ---------- */
+  function draw(){
+    // Cielo nocturno de estadio
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#0d1b2e'); g.addColorStop(0.45,'#14304a'); g.addColorStop(1,'#1c5c2e');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+
+    // Luces del estadio
+    ctx.fillStyle='rgba(255,255,220,.06)';
+    ctx.beginPath(); ctx.moveTo(20,0); ctx.lineTo(90,0); ctx.lineTo(150,H); ctx.lineTo(-30,H); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(W-20,0); ctx.lineTo(W-90,0); ctx.lineTo(W-150,H); ctx.lineTo(W+30,H); ctx.closePath(); ctx.fill();
+
+    // Tribuna de fondo
+    ctx.fillStyle='#0f1830'; ctx.fillRect(0,0,W,62);
+    for(let i=0;i<70;i++){
+      ctx.fillStyle=['#ff2e9a','#26e8ff','#ffe14d','#8cff5a','#b14bff'][i%5];
+      ctx.globalAlpha=0.35;
+      ctx.fillRect((i*31)%W, 8+((i*13)%44), 4, 4);
+    }
+    ctx.globalAlpha=1;
+
+    // Cesped con rayas
+    ctx.fillStyle='#1e6b34'; ctx.fillRect(0,ARCO.y+ARCO.h-6,W,H);
+    for(let i=0;i<8;i++){
+      ctx.fillStyle= i%2 ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.06)';
+      ctx.fillRect(0, ARCO.y+ARCO.h-6+i*24, W, 24);
+    }
+    // Area grande
+    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
+    ctx.strokeRect(28, ARCO.y+ARCO.h-6, W-56, 96);
+    // Punto del penal
+    ctx.fillStyle='rgba(255,255,255,.6)';
+    ctx.beginPath(); ctx.arc(W/2, PELOTA_Y+14, 3, 0, 7); ctx.fill();
+
+    // ARCO: postes y red
+    ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=1;
+    for(let x=ARCO.x; x<=ARCO.x+ARCO.w; x+=12){
+      ctx.beginPath(); ctx.moveTo(x,ARCO.y); ctx.lineTo(x,ARCO.y+ARCO.h); ctx.stroke();
+    }
+    for(let y=ARCO.y; y<=ARCO.y+ARCO.h; y+=12){
+      ctx.beginPath(); ctx.moveTo(ARCO.x,y); ctx.lineTo(ARCO.x+ARCO.w,y); ctx.stroke();
+    }
+    ctx.strokeStyle='#ffffff'; ctx.lineWidth=6; ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(ARCO.x, ARCO.y+ARCO.h); ctx.lineTo(ARCO.x, ARCO.y);
+    ctx.lineTo(ARCO.x+ARCO.w, ARCO.y); ctx.lineTo(ARCO.x+ARCO.w, ARCO.y+ARCO.h);
+    ctx.stroke();
+
+    // Zonas del angulo (donde vale doble)
+    if(fase==='mira'||fase==='potencia'){
+      ctx.fillStyle='rgba(255,225,77,.12)';
+      ctx.fillRect(ARCO.x+6, ARCO.y+6, 64, 32);
+      ctx.fillRect(ARCO.x+ARCO.w-70, ARCO.y+6, 64, 32);
+      ctx.fillStyle='rgba(255,225,77,.5)'; ctx.font='700 10px "Baloo 2",serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText('x2', ARCO.x+38, ARCO.y+22);
+      ctx.fillText('x2', ARCO.x+ARCO.w-38, ARCO.y+22);
+    }
+
+    dibujarArquero();
+    dibujarPateador();
+
+    // Pelota
+    ctx.save();
+    ctx.translate(pelota.x, pelota.y);
+    ctx.scale(pelota.escala, pelota.escala);
+    ctx.font='24px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('⚽',0,0);
+    ctx.restore();
+
+    // Mira
+    if(fase==='mira'){
+      ctx.strokeStyle='#ff2e9a'; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.arc(mira.x, ARCO.y+ARCO.h/2, 13, 0, 7); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(mira.x-19, ARCO.y+ARCO.h/2); ctx.lineTo(mira.x+19, ARCO.y+ARCO.h/2);
+      ctx.moveTo(mira.x, ARCO.y+ARCO.h/2-19); ctx.lineTo(mira.x, ARCO.y+ARCO.h/2+19);
+      ctx.stroke();
+    }
+
+    // Barra de potencia
+    if(fase==='potencia'){
+      const bx=20, by=H-92, bw=W-40, bh=16;
+      ctx.fillStyle='#0a0416'; rr(ctx,bx,by,bw,bh,8); ctx.fill();
+      const gr=ctx.createLinearGradient(bx,0,bx+bw,0);
+      gr.addColorStop(0,'#8cff5a'); gr.addColorStop(0.6,'#ffe14d'); gr.addColorStop(1,'#ff2e9a');
+      ctx.fillStyle=gr; rr(ctx,bx,by,bw*potencia/100,bh,8); ctx.fill();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=2; rr(ctx,bx,by,bw,bh,8); ctx.stroke();
+      ctx.fillStyle='#fff'; ctx.font='700 12px "Baloo 2",serif';
+      ctx.textAlign='center'; ctx.textBaseline='bottom';
+      ctx.fillText('POTENCIA', W/2, by-4);
+      // Marca de la zona "buena" (ni muy flojo ni muy alto)
+      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(bx+bw*0.45,by); ctx.lineTo(bx+bw*0.45,by+bh); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(bx+bw*0.85,by); ctx.lineTo(bx+bw*0.85,by+bh); ctx.stroke();
+    }
+
+    // Aviso de resultado
+    if(aviso){
+      ctx.save();
+      ctx.globalAlpha=Math.min(1, aviso.t/500);
+      ctx.font='700 22px "Baloo 2",serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillStyle=aviso.color; ctx.strokeStyle='#0a0416'; ctx.lineWidth=5;
+      ctx.strokeText(aviso.texto, W/2, H/2-10);
+      ctx.fillText(aviso.texto, W/2, H/2-10);
+      ctx.restore();
+    }
+  }
+
+  /* ---------- Controles ---------- */
+  const btn=el.querySelector('#pShoot');
+  btn.addEventListener('contextmenu',e=>e.preventDefault());
+  btn.addEventListener('pointerdown',e=>{e.preventDefault(); accion();});
+  cv.addEventListener('pointerdown',e=>{e.preventDefault(); accion();});
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  function kd(e){ if(e.key===' '){ e.preventDefault(); accion(); } }
+  document.addEventListener('keydown',kd);
+
+  startLevel(1);
+  cleanup=()=>{ if(raf) cancelAnimationFrame(raf); document.removeEventListener('keydown',kd); };
 }
 
 /* ================================================================
