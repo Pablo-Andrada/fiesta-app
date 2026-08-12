@@ -28,6 +28,7 @@ const Fiesta = (() => {
     jugadorId: null,
     apodo:     null,
     avatar:    null,
+    token:     null,    // clave secreta: prueba que somos nosotros
   };
 
   /* ---------- Ayudante para llamar a la API de Supabase ------ */
@@ -46,6 +47,23 @@ const Fiesta = (() => {
     if (!res.ok) throw new Error('error-api-' + res.status);
     const texto = await res.text();
     return texto ? JSON.parse(texto) : null;
+  }
+
+  /* Llama a una FUNCION del servidor (no a una tabla).
+     Las funciones seguras validan identidad y limites. */
+  async function rpc(nombre, parametros) {
+    if (!hayServidor()) throw new Error('sin-servidor');
+    const res = await fetch(SUPABASE_URL + '/rest/v1/rpc/' + nombre, {
+      method: 'POST',
+      headers: {
+        'apikey':        SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type':  'application/json',
+      },
+      body: JSON.stringify(parametros),
+    });
+    if (!res.ok) throw new Error('error-rpc-' + res.status);
+    return true;
   }
 
   /* ---------- Guardado local (respaldo y sesion) ------------- */
@@ -92,31 +110,89 @@ const Fiesta = (() => {
       }
     },
 
-    /* Registra al jugador (apodo + avatar) en la fiesta. */
+    /* Registra al jugador (apodo + avatar) en la fiesta.
+       Guarda el TOKEN que devuelve el servidor: es la prueba de
+       identidad que despues se usa para puntajes y chat. */
     async entrar(apodo, avatar) {
       estado.apodo  = apodo;
       estado.avatar = avatar;
-      local.guardar('sesion', { apodo, avatar, codigo: estado.fiesta?.codigo });
 
-      if (!estado.online) { estado.jugadorId = 'local'; return true; }
+      if (!estado.online) {
+        estado.jugadorId = 'local';
+        local.guardar('sesion', { apodo, avatar, codigo: estado.fiesta?.codigo });
+        return true;
+      }
       try {
-        // Si ya existe ese apodo en la fiesta, lo reutilizamos
-        const ya = await api('jugadores?fiesta_id=eq.' + estado.fiestaId +
-                             '&apodo=eq.' + encodeURIComponent(apodo) + '&select=*');
-        if (ya && ya.length) { estado.jugadorId = ya[0].id; return true; }
-
         const nuevo = await api('jugadores', {
           method: 'POST',
           body: JSON.stringify({ fiesta_id: estado.fiestaId, apodo, avatar }),
         });
         estado.jugadorId = nuevo[0].id;
-        local.guardar('jugadorId', estado.jugadorId);
+        estado.token     = nuevo[0].token;
+        // Guardamos la sesion COMPLETA para reconocerlo la proxima vez
+        local.guardar('sesion', {
+          apodo, avatar,
+          codigo:    estado.fiesta?.codigo,
+          fiestaId:  estado.fiestaId,
+          jugadorId: estado.jugadorId,
+          token:     estado.token,
+        });
         return true;
       } catch (e) {
+        // Si el apodo ya existe en esta fiesta, avisamos para que
+        // elija otro (no podemos "adoptar" a otro jugador porque
+        // no conocemos su token).
+        if (String(e.message).indexOf('409') >= 0) {
+          return { ok:false, error:'Ese apodo ya está usado en esta fiesta' };
+        }
         console.warn('No se pudo registrar online:', e.message);
         estado.online = false; estado.jugadorId = 'local';
+        local.guardar('sesion', { apodo, avatar, codigo: estado.fiesta?.codigo });
         return true;
       }
+    },
+
+    /* Intenta retomar la sesion guardada en ESTE navegador.
+       Asi el chico no tiene que elegir apodo y avatar cada vez,
+       y ademas queda siempre con la misma identidad. */
+    async retomarSesion() {
+      const ses = local.leer('sesion', null);
+      // Con que tengamos apodo y codigo alcanza para reconocerlo.
+      // El token solo existe si en su momento hubo servidor.
+      if (!ses || !ses.apodo || !ses.codigo) return false;
+
+      // Buscamos la fiesta del codigo guardado
+      const fiesta = await this.buscarFiesta(ses.codigo);
+      if (!fiesta) return false;
+
+      if (!estado.online) {
+        // Sin conexion: igual lo reconocemos con lo guardado
+        estado.apodo = ses.apodo; estado.avatar = ses.avatar; estado.jugadorId = 'local';
+        return true;
+      }
+      // Habia servidor pero no hay token guardado (sesion vieja):
+      // lo damos de alta de nuevo con el mismo apodo y avatar.
+      if (!ses.token) {
+        const r = await this.entrar(ses.apodo, ses.avatar);
+        return r === true;
+      }
+      try {
+        // Verificamos que el token siga siendo valido
+        const filas = await api('jugadores?token=eq.' + ses.token + '&select=id,apodo,avatar,fiesta_id');
+        if (!filas || !filas.length) return false;
+        if (filas[0].fiesta_id !== estado.fiestaId) return false;   // cambio de fiesta
+        estado.jugadorId = filas[0].id;
+        estado.apodo     = filas[0].apodo;
+        estado.avatar    = filas[0].avatar;
+        estado.token     = ses.token;
+        return true;
+      } catch (e) { return false; }
+    },
+
+    /* Permite cambiar de jugador (borra la sesion de este navegador) */
+    olvidarSesion() {
+      try { localStorage.removeItem('fiesta_sesion'); } catch (e) {}
+      estado.jugadorId = null; estado.token = null; estado.apodo = null;
     },
 
     /* Guarda el mejor puntaje de un juego.
@@ -130,18 +206,15 @@ const Fiesta = (() => {
       };
       local.guardar('puntajes', locales);
 
-      if (!estado.online || !estado.jugadorId || estado.jugadorId === 'local') return;
+      if (!estado.online || !estado.token) return;
       try {
-        await api('puntajes?on_conflict=jugador_id,juego', {
-          method: 'POST',
-          prefer: 'resolution=merge-duplicates,return=minimal',
-          body: JSON.stringify({
-            fiesta_id:  estado.fiestaId,
-            jugador_id: estado.jugadorId,
-            juego,
-            puntos: locales[juego].puntos,
-            nivel:  locales[juego].nivel,
-          }),
+        // Ya no escribimos directo en la tabla: llamamos a una
+        // funcion del servidor que verifica identidad y topes.
+        await rpc('guardar_puntaje_seguro', {
+          p_token:  estado.token,
+          p_juego:  juego,
+          p_puntos: locales[juego].puntos,
+          p_nivel:  locales[juego].nivel,
         });
       } catch (e) { console.warn('No se pudo subir el puntaje:', e.message); }
     },
@@ -213,23 +286,19 @@ const Fiesta = (() => {
 
     /* Manda un mensaje al chat */
     async enviarMensaje(texto) {
-      if (!estado.online || !estado.fiestaId) return false;
+      if (!estado.online || !estado.token) return false;
       const limpio = (texto || '').trim().slice(0, 200);
       if (!limpio) return false;
       try {
-        await api('mensajes', {
-          method: 'POST',
-          prefer: 'return=minimal',
-          body: JSON.stringify({
-            fiesta_id:  estado.fiestaId,
-            jugador_id: estado.jugadorId !== 'local' ? estado.jugadorId : null,
-            apodo:      estado.apodo,
-            avatar:     estado.avatar,
-            texto:      limpio,
-          }),
-        });
+        // El servidor pone el apodo y el avatar segun el token,
+        // asi nadie puede firmar un mensaje como otra persona.
+        await rpc('enviar_mensaje_seguro', { p_token: estado.token, p_texto: limpio });
         return true;
-      } catch (e) { return false; }
+      } catch (e) {
+        // Si escribio muy rapido, avisamos con un valor especial
+        if (String(e.message).indexOf('429') >= 0 || String(e.message).indexOf('400') >= 0) return 'lento';
+        return false;
+      }
     },
 
     /* Avisa "sigo conectado". Se llama cada pocos segundos. */

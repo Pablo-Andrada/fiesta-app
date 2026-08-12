@@ -234,6 +234,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div class="yo"><span class="ava" id="miAvatar">🙂</span><span class="nom" id="miApodo">—</span></div>
     <div style="display:flex;gap:8px;align-items:center">
       <button id="btnSonido" class="chip on" style="cursor:pointer;font-family:'Baloo 2';font-size:16px;padding:5px 12px">🔊</button>
+      <button id="btnCambiar" class="chip off" style="cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px" title="Cambiar de jugador">👤</button>
       <span class="chip off" id="chipConexion">local</span>
     </div>
   </div>
@@ -281,6 +282,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 
 <script src="ranking.js"></script>
 <script src="sonido.js"></script>
+<script src="musica.js"></script>
 <script>
 /* ================================================================
    CONFIGURACION DE LOS JUEGOS DISPONIBLES
@@ -308,6 +310,17 @@ const AVATARES=['🦁','🐯','🐸','🐼','🦊','🐵','🦄','🐲','🤖','
    PANTALLA DE ENTRADA
    ================================================================ */
 let avatarElegido=AVATARES[0];
+
+/* Al abrir la app, intentamos reconocer al jugador de este
+   navegador. Si ya jugo antes, entra directo sin volver a
+   elegir apodo ni avatar. Ademas asi mantiene SIEMPRE la misma
+   identidad, que es lo que hace coherente el chat y el ranking. */
+(async function autoEntrar(){
+  if(await Fiesta.retomarSesion()){
+    avatarElegido = Fiesta.estado.avatar;
+    mostrarApp();
+  }
+})();
 
 (function initEntrada(){
   const cont=document.getElementById('avatares');
@@ -352,25 +365,49 @@ async function entrarAJugar(){
   const aviso=document.getElementById('aviso2');
   if(apodo.length<2){ aviso.textContent='Poné un apodo de al menos 2 letras'; return; }
   aviso.textContent='Entrando…';
-  await Fiesta.entrar(apodo, avatarElegido);
+  const r=await Fiesta.entrar(apodo, avatarElegido);
+  // Si el apodo ya esta usado en esta fiesta, avisamos
+  if(r && r.ok===false){ aviso.textContent=r.error; return; }
+  aviso.textContent='';
+  mostrarApp();
+  burst(160);
+}
+
+/* Muestra la app y oculta la pantalla de entrada.
+   Se usa tanto al entrar por primera vez como al ser reconocido. */
+function mostrarApp(){
   document.getElementById('entrada').style.display='none';
   document.getElementById('appMain').style.display='block';
   document.getElementById('tabbar').style.display='flex';
-  document.getElementById('miApodo').textContent=apodo;
-  document.getElementById('miAvatar').textContent=avatarElegido;
+  document.getElementById('miApodo').textContent=Fiesta.estado.apodo||'';
+  document.getElementById('miAvatar').textContent=Fiesta.estado.avatar||'🙂';
   const chip=document.getElementById('chipConexion');
   chip.textContent = Fiesta.estado.online ? 'en línea' : 'sin conexión';
   chip.className   = 'chip ' + (Fiesta.estado.online ? 'on' : 'off');
-  if(Fiesta.estado.fiesta?.nombre) document.getElementById('subJuegos').textContent=Fiesta.estado.fiesta.nombre;
-  renderJuegos(); burst(160);
+  if(Fiesta.estado.fiesta && Fiesta.estado.fiesta.nombre){
+    document.getElementById('subJuegos').textContent=Fiesta.estado.fiesta.nombre;
+  }
+  renderJuegos();
   Fiesta.latido();                     // avisa que entro a la sala
 }
+
+/* Boton para cambiar de jugador en este navegador */
+document.getElementById('btnCambiar').onclick=function(){
+  if(confirm('¿Querés entrar con otro jugador?\n\nVas a perder el progreso guardado en este celular.')){
+    Fiesta.olvidarSesion();
+    location.reload();
+  }
+};
 
 /* Boton para prender / apagar el sonido */
 document.getElementById('btnSonido').onclick=function(){
   const on=Sonido.toggle();
   this.textContent = on ? '🔊' : '🔇';
   this.className   = 'chip ' + (on ? 'on' : 'off');
+  // Si vuelve a prender el sonido y hay un juego abierto,
+  // arrancamos de nuevo su musica.
+  if(!on) Musica.parar();
+  else if(modal.classList.contains('open') && juegoAbierto) Musica.tocar(juegoAbierto);
 };
 
 /* ================================================================
@@ -511,7 +548,12 @@ async function enviarMensaje(){
   if(!texto) return;
   inp.value='';
   const ok=await Fiesta.enviarMensaje(texto);
-  if(ok){ Sonido.play('tap'); cargarMensajes(false); }
+  if(ok===true){ Sonido.play('tap'); cargarMensajes(false); }
+  else if(ok==='lento'){
+    inp.value=texto;
+    inp.placeholder='Esperá un segundito…';
+    setTimeout(function(){ inp.placeholder='Escribí algo…'; }, 1800);
+  }
   else inp.value=texto;
 }
 
@@ -540,17 +582,22 @@ document.querySelectorAll('.tabbar button').forEach(b=>b.onclick=()=>showTab(b.d
    VENTANA DE JUEGOS
    ================================================================ */
 const modal=document.getElementById('modal'), modalHost=document.getElementById('modalHost');
+let juegoAbierto=null;      // que juego se esta jugando ahora
 let cleanup=null;
 function openGame(id){
   Sonido.play('tap');
   if(cleanup){ cleanup(); cleanup=null; }
   modalHost.innerHTML=''; modal.classList.add('open');
   const j=JUEGOS.find(x=>x.id===id); if(j) j.fn()(modalHost);
+  juegoAbierto=id;
+  Musica.tocar(id);                    // musica propia de cada juego
 }
 function closeModal(){
   modal.classList.remove('open');
   if(cleanup){ cleanup(); cleanup=null; }
   modalHost.innerHTML=''; renderJuegos();
+  juegoAbierto=null;
+  Musica.parar();                      // la musica solo suena dentro del juego
 }
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModal(); });
 
@@ -3622,7 +3669,8 @@ function Penales(el){
 const cc=document.getElementById('confetti'), cx=cc.getContext('2d'); let parts=[], anim=null;
 function sizeCanvas(){ cc.width=innerWidth; cc.height=innerHeight; } sizeCanvas(); addEventListener('resize',sizeCanvas);
 const COLORS=['#ff2e9a','#26e8ff','#b14bff','#ffe14d','#8cff5a'];
-function burst(n=120){ if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;
+function burst(n=120){
+  try{ Musica.agachar(1400); }catch(e){}   // baja la musica en los festejos if(matchMedia('(prefers-reduced-motion:reduce)').matches)return;
   for(let k=0;k<n;k++){ parts.push({ x:innerWidth/2, y:innerHeight/3, vx:(Math.random()-0.5)*10, vy:Math.random()*-9-3, g:0.28, s:6+Math.random()*7, r:Math.random()*6, col:COLORS[(Math.random()*COLORS.length)|0], life:120 }); }
   if(!anim) tick(); }
 function tick(){ cx.clearRect(0,0,cc.width,cc.height);
