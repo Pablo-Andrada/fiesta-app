@@ -234,20 +234,28 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 <div id="adminPanel">
   <div class="adm-caja">
     <div class="adm-tit">🛠 PANEL ADMIN</div>
-    <p class="adm-sub" id="admSub">Ingresá la clave para administrar la fiesta</p>
+    <p class="adm-sub" id="admSub">Ingresá tu usuario y contraseña</p>
 
-    <!-- Paso 1: clave -->
-    <div id="admLogin">
-      <input class="adm-campo" id="admCodigo" placeholder="Código de la fiesta" autocomplete="off">
-      <input class="adm-campo" id="admClave" type="password" placeholder="Clave de admin" autocomplete="off">
+    <!-- Paso 1: LOGIN MAESTRO (un solo usuario y contraseña para todo) -->
+    <div id="admLoginMaestro">
+      <input class="adm-campo" id="admUsuario" placeholder="Usuario" autocomplete="off">
+      <input class="adm-campo" id="admPass" type="password" placeholder="Contraseña" autocomplete="off">
       <div class="adm-err" id="admErr"></div>
       <div style="display:flex;gap:8px">
         <button class="btn alt" id="admEntrar" style="flex:1">Entrar</button>
-        <button class="btn" id="admCerrar">Salir</button>
+        <button class="btn" id="admCancelar">Cancelar</button>
       </div>
     </div>
 
-    <!-- Paso 2: herramientas -->
+    <!-- Paso 2: ELEGIR QUE FIESTA ADMINISTRAR -->
+    <div id="admFiestas" style="display:none">
+      <div id="admListaFiestas"></div>
+      <div class="adm-seccion" style="text-align:center">
+        <button class="btn" id="admCerrarSesion">Cerrar sesión</button>
+      </div>
+    </div>
+
+    <!-- Paso 3: herramientas -->
     <div id="admHerramientas" style="display:none">
       <div class="adm-stats" id="admStats"></div>
       <div class="adm-ok" id="admOk"></div>
@@ -276,7 +284,8 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
         <button class="btn alt" id="admCrear" style="width:100%">Crear fiesta</button>
       </div>
 
-      <div class="adm-seccion" style="text-align:center">
+      <div class="adm-seccion" style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn" id="admVolverFiestas">← Cambiar de fiesta</button>
         <button class="btn" id="admSalir">Cerrar panel</button>
       </div>
     </div>
@@ -323,7 +332,6 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div style="display:flex;gap:8px;align-items:center">
       <button id="btnSonido" class="chip on" style="cursor:pointer;font-family:'Baloo 2';font-size:16px;padding:5px 12px">🔊</button>
       <button id="btnCambiar" class="chip off" style="cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px" title="Cambiar de jugador">👤</button>
-      <button id="btnAdmin" class="chip off" style="cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px" title="Panel de administrador">🛠</button>
       <span class="chip off" id="chipConexion">local</span>
     </div>
   </div>
@@ -405,6 +413,12 @@ let avatarElegido=AVATARES[0];
    elegir apodo ni avatar. Ademas asi mantiene SIEMPRE la misma
    identidad, que es lo que hace coherente el chat y el ranking. */
 (async function autoEntrar(){
+  // Acceso directo de admin por link: ...index.html?admin=1
+  // Abre el login de administrador sin entrar como jugador.
+  if(new URLSearchParams(location.search).get('admin')==='1'){
+    abrirAdmin();
+    return;
+  }
   if(await Fiesta.retomarSesion()){
     avatarElegido = Fiesta.estado.avatar;
     mostrarApp();
@@ -439,6 +453,11 @@ async function validarCodigo(){
   const cod=document.getElementById('inpCodigo').value.trim();
   const aviso=document.getElementById('aviso1');
   if(!cod){ aviso.textContent='Escribí el código de la fiesta'; return; }
+
+  // Codigo especial: si escribis ADMIN, no busca una fiesta,
+  // abre el login de administrador (usuario + contraseña).
+  if(cod.toUpperCase()==='ADMIN'){ aviso.textContent=''; abrirAdmin(); return; }
+
   aviso.textContent='Buscando…';
   const fiesta=await Fiesta.buscarFiesta(cod);
   if(!fiesta){ aviso.textContent='Ese código no existe o la fiesta ya terminó'; return; }
@@ -685,34 +704,98 @@ addEventListener('pagehide', function(){ Fiesta.salirDelChat(); });
    La clave se verifica SIEMPRE en el servidor.
    ================================================================ */
 const admPanel=document.getElementById('adminPanel');
+let fiestasAdmin=[];   // fiestas que devuelve el login maestro
 
-document.getElementById('btnAdmin').onclick=function(){
-  admPanel.classList.add('open');
-  document.getElementById('admCodigo').value = Fiesta.estado.fiesta ? Fiesta.estado.fiesta.codigo : '';
-};
-document.getElementById('admCerrar').onclick=function(){ admPanel.classList.remove('open'); };
-document.getElementById('admSalir').onclick=function(){
-  Fiesta.admin.salir();
+/* Abre el panel mostrando el login maestro.
+   Se llama al escribir el codigo ADMIN o al entrar con ?admin=1. */
+function abrirAdmin(){
+  // Usamos getElementById directo (no la const admPanel) porque
+  // esta funcion puede ejecutarse al cargar la pagina con ?admin=1,
+  // antes de que esa const se termine de inicializar.
+  document.getElementById('adminPanel').classList.add('open');
+  document.getElementById('admLoginMaestro').style.display='block';
+  document.getElementById('admFiestas').style.display='none';
   document.getElementById('admHerramientas').style.display='none';
-  document.getElementById('admLogin').style.display='block';
-  document.getElementById('admClave').value='';
+  document.getElementById('admSub').textContent='Ingresá tu usuario y contraseña';
+  document.getElementById('admErr').textContent='';
+  document.getElementById('admUsuario').focus();
+}
+
+/* Cancelar: cierra el panel y vuelve a la pantalla de entrada. */
+document.getElementById('admCancelar').onclick=function(){
   admPanel.classList.remove('open');
+  document.getElementById('admPass').value='';
 };
 
+/* Cierra sesion por completo y recarga limpio (sin ?admin en el link). */
+function cerrarAdminTotal(){
+  Fiesta.admin.salir();
+  location.href=location.pathname;
+}
+document.getElementById('admCerrarSesion').onclick=cerrarAdminTotal;
+document.getElementById('admSalir').onclick=cerrarAdminTotal;
+
+/* PASO 1 · Validar el login maestro y traer las fiestas.
+   La contraseña se verifica en el SERVIDOR, nunca queda en la pagina. */
 document.getElementById('admEntrar').onclick=async function(){
-  const cod=document.getElementById('admCodigo').value.trim();
-  const cla=document.getElementById('admClave').value;
+  const u=document.getElementById('admUsuario').value.trim();
+  const p=document.getElementById('admPass').value;
   const err=document.getElementById('admErr');
-  if(!cod || !cla){ err.textContent='Completá código y clave'; return; }
+  if(!u || !p){ err.textContent='Completá usuario y contraseña'; return; }
   err.textContent='Verificando…';
-  const d=await Fiesta.admin.entrar(cod, cla);
-  if(!d){ err.textContent='Código o clave incorrectos'; return; }
+  const lista=await Fiesta.admin.entrarMaestro(u, p);
+  if(lista===null){ err.textContent='Usuario o contraseña incorrectos'; return; }
   err.textContent='';
-  document.getElementById('admLogin').style.display='none';
+  fiestasAdmin=lista;
+  mostrarListaFiestas();
+};
+document.getElementById('admPass').addEventListener('keydown', function(e){
+  if(e.key==='Enter') document.getElementById('admEntrar').click();
+});
+
+/* PASO 2 · Mostrar las fiestas para elegir cual administrar. */
+function mostrarListaFiestas(){
+  document.getElementById('admLoginMaestro').style.display='none';
+  document.getElementById('admHerramientas').style.display='none';
+  document.getElementById('admFiestas').style.display='block';
+  document.getElementById('admSub').textContent='Elegí qué fiesta administrar';
+  const cont=document.getElementById('admListaFiestas');
+  if(!fiestasAdmin.length){ cont.innerHTML='<div class="adm-sub">No hay fiestas todavía</div>'; return; }
+  cont.innerHTML=fiestasAdmin.map(function(f){
+    const est = f.activa
+      ? '<span class="pun on">activa</span>'
+      : '<span class="pun off">cerrada</span>';
+    return '<div class="adm-fila">'+
+      '<div class="ava">🎉</div>'+
+      '<div class="datos"><div class="nom">'+escapar(f.nombre||f.codigo)+'</div>'+
+      '<div class="det">'+escapar(f.codigo)+(f.festejado?' · '+escapar(f.festejado):'')+'</div></div>'+
+      est+
+      '<button class="btn alt" data-cod="'+escapar(f.codigo)+'" data-cla="'+escapar(f.clave_admin)+'" style="padding:6px 12px">Abrir</button>'+
+      '</div>';
+  }).join('');
+  cont.querySelectorAll('button[data-cod]').forEach(function(b){
+    b.onclick=function(){ abrirHerramientas(b.dataset.cod, b.dataset.cla); };
+  });
+}
+
+/* PASO 3 · Abrir las herramientas de UNA fiesta.
+   Reusa el login por fiesta que ya existia (la clave ya la
+   tenemos de la lista, asi que no hay que escribir nada mas). */
+async function abrirHerramientas(codigo, clave){
+  const d=await Fiesta.admin.entrar(codigo, clave);
+  if(!d){ alert('No se pudo abrir esa fiesta'); return; }
+  document.getElementById('admLoginMaestro').style.display='none';
+  document.getElementById('admFiestas').style.display='none';
   document.getElementById('admHerramientas').style.display='block';
   document.getElementById('admSub').textContent=d.nombre||'Administrando la fiesta';
   pintarStats(d);
   cargarJugadoresAdmin();
+}
+
+/* Volver a la lista de fiestas sin cerrar sesion. */
+document.getElementById('admVolverFiestas').onclick=function(){
+  Fiesta.admin.salir();
+  mostrarListaFiestas();
 };
 
 function pintarStats(d){

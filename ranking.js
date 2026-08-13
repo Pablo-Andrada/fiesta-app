@@ -382,6 +382,26 @@ const Fiesta = (() => {
       clave: null,
       fiestaId: null,
 
+      /* LOGIN MAESTRO
+         Un solo usuario y contraseña para administrar TODAS las
+         fiestas. La contraseña se verifica en el SERVIDOR (funcion
+         admin_maestro_fiestas): nunca viaja ni queda en la pagina
+         mas alla del momento de validarla.
+         Devuelve:
+           - la lista de fiestas  -> login correcto
+           - null                 -> usuario o contraseña incorrectos */
+      async entrarMaestro(usuario, clave) {
+        try {
+          const r = await rpc('admin_maestro_fiestas', {
+            p_usuario: usuario,
+            p_clave:   clave,
+          });
+          return Array.isArray(r) ? r : [];
+        } catch (e) {
+          return null;   // el servidor rechazo las credenciales
+        }
+      },
+
       /* Entra al panel. Devuelve los datos de la fiesta o null. */
       async entrar(codigo, clave) {
         try {
