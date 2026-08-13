@@ -218,6 +218,10 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .adm-err{ color:var(--magenta); font-weight:700; font-size:13px; min-height:20px; text-align:center }
 .adm-ok{ color:var(--lime); font-weight:700; font-size:13px; min-height:20px; text-align:center }
 .adm-stats{ display:flex; gap:8px; justify-content:center; margin-bottom:14px; flex-wrap:wrap }
+.adm-resultado{ margin-top:12px; border:3px solid var(--lime); border-radius:14px; padding:12px 14px;
+  background:rgba(120,255,120,.08); font-weight:700; font-size:13px; line-height:1.5 }
+.adm-resultado b{ color:var(--lime) }
+.adm-resultado .dato{ display:block; margin-top:6px; word-break:break-all }
 .adm-stat{ background:var(--panel2); border:2px solid var(--ink); border-radius:12px; padding:6px 12px; font-weight:800; font-size:13px }
 
 #confetti{ position:fixed; inset:0; pointer-events:none; z-index:90 }
@@ -250,6 +254,28 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <!-- Paso 2: ELEGIR QUE FIESTA ADMINISTRAR -->
     <div id="admFiestas" style="display:none">
       <div id="admListaFiestas"></div>
+
+      <!-- Zona SOLO para el super admin (crear fiestas y cuentas) -->
+      <div id="admZonaSuper" style="display:none">
+        <div class="adm-seccion">
+          <h3>🎉 Nueva fiesta + cuenta del padre</h3>
+          <p class="adm-sub" style="text-align:left;margin:0 0 10px">Se crea la fiesta y la cuenta del cliente en un paso. Al terminar te muestro los datos para pasarle.</p>
+          <input class="adm-campo" id="admNvCodigo" placeholder="Código para invitados (ej: SOFI2026)" autocomplete="off">
+          <input class="adm-campo" id="admNvNombre" placeholder="Nombre (ej: Cumple de Sofi)" autocomplete="off">
+          <input class="adm-campo" id="admNvFestejado" placeholder="Festejado/a (ej: Sofi)" autocomplete="off">
+          <input class="adm-campo" id="admNvDias" type="number" placeholder="Días de duración (ej: 30)" autocomplete="off">
+          <input class="adm-campo" id="admNvUser" placeholder="Usuario del padre (ej: sofi_mama)" autocomplete="off">
+          <input class="adm-campo" id="admNvPass" placeholder="Contraseña para el padre" autocomplete="off">
+          <button class="btn alt" id="admCrear" style="width:100%">Crear fiesta y cuenta</button>
+          <div class="adm-resultado" id="admNvResultado" style="display:none"></div>
+        </div>
+
+        <div class="adm-seccion">
+          <h3>👤 Administradores</h3>
+          <div id="admListaAdmins"></div>
+        </div>
+      </div>
+
       <div class="adm-seccion" style="text-align:center">
         <button class="btn" id="admCerrarSesion">Cerrar sesión</button>
       </div>
@@ -273,15 +299,6 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
           <button class="btn danger" id="admCerrarFiesta">Cerrar fiesta</button>
           <button class="btn alt" id="admAbrirFiesta">Reabrir fiesta</button>
         </div>
-      </div>
-
-      <div class="adm-seccion">
-        <h3>🎉 Nueva fiesta</h3>
-        <input class="adm-campo" id="admNvCodigo" placeholder="Código nuevo (ej: SOFI2026)" autocomplete="off">
-        <input class="adm-campo" id="admNvNombre" placeholder="Nombre (ej: Cumple de Sofi)" autocomplete="off">
-        <input class="adm-campo" id="admNvFestejado" placeholder="Festejado/a (ej: Sofi)" autocomplete="off">
-        <input class="adm-campo" id="admNvClave" placeholder="Clave de admin para esa fiesta" autocomplete="off">
-        <button class="btn alt" id="admCrear" style="width:100%">Crear fiesta</button>
       </div>
 
       <div class="adm-seccion" style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
@@ -704,7 +721,8 @@ addEventListener('pagehide', function(){ Fiesta.salirDelChat(); });
    La clave se verifica SIEMPRE en el servidor.
    ================================================================ */
 const admPanel=document.getElementById('adminPanel');
-let fiestasAdmin=[];   // fiestas que devuelve el login maestro
+let fiestasAdmin=[];   // fiestas que devuelve el login
+let rolAdmin=null;     // 'super' o 'normal'
 
 /* Abre el panel mostrando el login maestro.
    Se llama al escribir el codigo ADMIN o al entrar con ?admin=1. */
@@ -743,11 +761,17 @@ document.getElementById('admEntrar').onclick=async function(){
   const err=document.getElementById('admErr');
   if(!u || !p){ err.textContent='Completá usuario y contraseña'; return; }
   err.textContent='Verificando…';
-  const lista=await Fiesta.admin.entrarMaestro(u, p);
-  if(lista===null){ err.textContent='Usuario o contraseña incorrectos'; return; }
+  const datos=await Fiesta.admin.entrarMaestro(u, p);
+  if(datos===null){ err.textContent='Usuario o contraseña incorrectos'; return; }
   err.textContent='';
-  fiestasAdmin=lista;
-  mostrarListaFiestas();
+  fiestasAdmin = datos.fiestas || [];
+  rolAdmin     = datos.rol;
+  // Un admin normal con una sola fiesta entra directo a sus herramientas.
+  if(rolAdmin!=='super' && fiestasAdmin.length===1){
+    abrirHerramientas(fiestasAdmin[0].codigo, fiestasAdmin[0].clave_admin);
+  } else {
+    mostrarListaFiestas();
+  }
 };
 document.getElementById('admPass').addEventListener('keydown', function(e){
   if(e.key==='Enter') document.getElementById('admEntrar').click();
@@ -775,6 +799,42 @@ function mostrarListaFiestas(){
   }).join('');
   cont.querySelectorAll('button[data-cod]').forEach(function(b){
     b.onclick=function(){ abrirHerramientas(b.dataset.cod, b.dataset.cla); };
+  });
+
+  // La zona de crear fiestas y cuentas es SOLO para el super admin.
+  const esSuper = (rolAdmin==='super');
+  document.getElementById('admZonaSuper').style.display = esSuper ? 'block' : 'none';
+  document.getElementById('admSub').textContent = esSuper
+    ? 'Tus fiestas' : 'Tu fiesta';
+  if(esSuper) cargarListaAdmins();
+}
+
+/* SUPER · Lista de administradores (para verlos y borrarlos). */
+async function cargarListaAdmins(){
+  const cont=document.getElementById('admListaAdmins');
+  cont.innerHTML='<div class="adm-sub">Cargando…</div>';
+  const lista=await Fiesta.admin.listarAdmins();
+  if(!lista.length){ cont.innerHTML='<div class="adm-sub">Sin administradores</div>'; return; }
+  cont.innerHTML=lista.map(function(a){
+    const esSuper = a.rol==='super';
+    const donde = esSuper ? 'todas las fiestas'
+                          : (a.fiesta_codigo ? escapar(a.fiesta_codigo) : 'sin fiesta');
+    return '<div class="adm-fila">'+
+      '<div class="ava">'+(esSuper?'👑':'👤')+'</div>'+
+      '<div class="datos"><div class="nom">'+escapar(a.usuario)+'</div>'+
+      '<div class="det">'+donde+'</div></div>'+
+      '<span class="pun '+(esSuper?'on':'off')+'">'+(esSuper?'súper':'admin')+'</span>'+
+      // Al super no se lo puede borrar desde aca
+      (esSuper?'' : '<button class="adm-x" data-id="'+a.id+'" title="Borrar admin">✕</button>')+
+      '</div>';
+  }).join('');
+  cont.querySelectorAll('.adm-x').forEach(function(b){
+    b.onclick=async function(){
+      if(!confirm('¿Borrar esta cuenta de administrador?\n\nEl padre ya no podrá entrar a su fiesta.')) return;
+      const ok=await Fiesta.admin.borrarAdmin(Number(b.dataset.id));
+      if(ok) cargarListaAdmins();
+      else alert('No se pudo borrar');
+    };
   });
 }
 
@@ -856,20 +916,81 @@ document.getElementById('admAbrirFiesta').onclick=async function(){
   avisoAdmin(ok?'Fiesta reabierta':'No se pudo');
 };
 
+/* SUPER · Crear fiesta + cuenta del padre en un solo paso.
+   Al terminar muestra en pantalla los datos que hay que pasarle
+   al cliente: el codigo para los invitados y el usuario/clave
+   con los que el padre entra a administrar SU fiesta. */
 document.getElementById('admCrear').onclick=async function(){
-  const cod=document.getElementById('admNvCodigo').value.trim().toUpperCase();
-  const nom=document.getElementById('admNvNombre').value.trim();
-  const fes=document.getElementById('admNvFestejado').value.trim();
-  const cla=document.getElementById('admNvClave').value.trim();
-  if(!cod||!nom||!cla){ avisoAdmin('Faltan datos'); return; }
-  const r=await Fiesta.admin.crearFiesta(cod,nom,fes,cla,30);
-  if(r){
-    avisoAdmin('¡Fiesta '+r.codigo+' creada!');
-    ['admNvCodigo','admNvNombre','admNvFestejado','admNvClave'].forEach(function(id){
-      document.getElementById(id).value='';
-    });
-  } else avisoAdmin('No se pudo crear (¿código repetido?)');
+  const cod =document.getElementById('admNvCodigo').value.trim().toUpperCase();
+  const nom =document.getElementById('admNvNombre').value.trim();
+  const fes =document.getElementById('admNvFestejado').value.trim();
+  const dias=parseInt(document.getElementById('admNvDias').value,10)||30;
+  const user=document.getElementById('admNvUser').value.trim().toLowerCase();
+  const pass=document.getElementById('admNvPass').value.trim();
+  const box =document.getElementById('admNvResultado');
+
+  if(!cod||!nom||!user||!pass){
+    box.style.display='block';
+    box.style.borderColor='var(--magenta)';
+    box.innerHTML='Faltan datos: necesito al menos código, nombre, usuario y contraseña del padre.';
+    return;
+  }
+
+  const btn=this; btn.disabled=true; const txt=btn.textContent; btn.textContent='Creando…';
+
+  // 1) Crear la fiesta
+  const f=await Fiesta.admin.crearFiestaSuper(cod, nom, fes, dias);
+  if(f.error){
+    box.style.display='block'; box.style.borderColor='var(--magenta)';
+    box.innerHTML='No se pudo crear la fiesta: '+escapar(f.error);
+    btn.disabled=false; btn.textContent=txt; return;
+  }
+
+  // 2) Crear la cuenta del padre, atada a esa fiesta
+  const a=await Fiesta.admin.crearAdmin(user, pass, f.id);
+  btn.disabled=false; btn.textContent=txt;
+  if(!a){
+    box.style.display='block'; box.style.borderColor='var(--magenta)';
+    box.innerHTML='La fiesta <b>'+escapar(f.codigo)+'</b> se creó, pero no se pudo crear la cuenta del padre. Probá otro usuario.';
+    return;
+  }
+
+  // 3) Mostrar los datos para pasarle al cliente.
+  //    El link del panel es la misma app con ?admin=1 (URL real).
+  const linkAdmin = location.origin + location.pathname + '?admin=1';
+  box.style.display='block'; box.style.borderColor='var(--lime)';
+  box.innerHTML=
+    '✅ <b>¡Listo!</b> Datos para pasarle al cliente:'+
+    '<span class="dato">🎟️ Código para invitados: <b>'+escapar(f.codigo)+'</b></span>'+
+    '<span class="dato">🔗 Panel del padre: '+escapar(linkAdmin)+'</span>'+
+    '<span class="dato">👤 Usuario: <b>'+escapar(a.usuario)+'</b></span>'+
+    '<span class="dato">🔑 Contraseña: <b>'+escapar(pass)+'</b></span>';
+
+  // Limpiar el formulario y refrescar la lista
+  ['admNvCodigo','admNvNombre','admNvFestejado','admNvDias','admNvUser','admNvPass']
+    .forEach(function(id){ document.getElementById(id).value=''; });
+  const r=await Fiesta.admin.entrarMaestro(Fiesta.admin.usuario, Fiesta.admin.claveMaestra);
+  if(r){ fiestasAdmin=r.fiestas||[]; }
+  // Redibujar la lista de fiestas y de admins sin perder el resultado mostrado
+  pintarListaFiestasSolo();
+  cargarListaAdmins();
 };
+
+/* Redibuja solo la lista de fiestas (sin tocar la zona super ni el
+   texto del resultado que le acabamos de mostrar al super admin). */
+function pintarListaFiestasSolo(){
+  const cont=document.getElementById('admListaFiestas');
+  cont.innerHTML=fiestasAdmin.map(function(f){
+    const est=f.activa?'<span class="pun on">activa</span>':'<span class="pun off">cerrada</span>';
+    return '<div class="adm-fila"><div class="ava">🎉</div>'+
+      '<div class="datos"><div class="nom">'+escapar(f.nombre||f.codigo)+'</div>'+
+      '<div class="det">'+escapar(f.codigo)+(f.festejado?' · '+escapar(f.festejado):'')+'</div></div>'+
+      est+'<button class="btn alt" data-cod="'+escapar(f.codigo)+'" data-cla="'+escapar(f.clave_admin)+'" style="padding:6px 12px">Abrir</button></div>';
+  }).join('');
+  cont.querySelectorAll('button[data-cod]').forEach(function(b){
+    b.onclick=function(){ abrirHerramientas(b.dataset.cod, b.dataset.cla); };
+  });
+}
 
 /* ================================================================
    NAVEGACION

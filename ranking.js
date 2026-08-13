@@ -379,30 +379,88 @@ const Fiesta = (() => {
        La clave nunca queda expuesta: solo se manda para validar.
        ============================================================ */
     admin: {
-      clave: null,
-      fiestaId: null,
+      clave:        null,   // clave interna de la fiesta que se administra ahora
+      fiestaId:     null,
+      usuario:      null,   // login maestro (para acciones de super)
+      claveMaestra: null,
+      rol:          null,   // 'super' o 'normal'
 
-      /* LOGIN MAESTRO
-         Un solo usuario y contraseña para administrar TODAS las
-         fiestas. La contraseña se verifica en el SERVIDOR (funcion
-         admin_maestro_fiestas): nunca viaja ni queda en la pagina
-         mas alla del momento de validarla.
-         Devuelve:
-           - la lista de fiestas  -> login correcto
-           - null                 -> usuario o contraseña incorrectos */
+      /* LOGIN DEL PANEL
+         Verifica usuario + contraseña en el SERVIDOR y devuelve
+         que puede administrar la persona:
+           - un SUPER admin recibe TODAS las fiestas
+           - un admin NORMAL recibe SOLO la suya
+         Devuelve un objeto { rol, fiestas:[...] }, o null si el
+         usuario/contraseña estan mal. */
       async entrarMaestro(usuario, clave) {
         try {
-          const r = await rpc('admin_maestro_fiestas', {
+          const r = await rpc('admin_entrar_maestro', {
             p_usuario: usuario,
             p_clave:   clave,
           });
-          return Array.isArray(r) ? r : [];
+          const d = Array.isArray(r) ? r[0] : r;
+          if (!d || !d.rol) return null;
+          this.usuario = usuario; this.claveMaestra = clave; this.rol = d.rol;
+          return d;
         } catch (e) {
           return null;   // el servidor rechazo las credenciales
         }
       },
 
-      /* Entra al panel. Devuelve los datos de la fiesta o null. */
+      /* SUPER · Crea una fiesta nueva. El servidor le pone una
+         clave interna aleatoria. Devuelve { id, codigo, clave_admin }
+         o { error } si algo fallo (ej: codigo repetido). */
+      async crearFiestaSuper(codigo, nombre, festejado, dias) {
+        try {
+          const r = await rpc('super_crear_fiesta', {
+            p_usuario:   this.usuario, p_clave: this.claveMaestra,
+            p_codigo:    codigo, p_nombre: nombre,
+            p_festejado: festejado, p_dias: dias || 30,
+          });
+          const d = Array.isArray(r) ? r[0] : r;
+          return (d && d.id) ? d : { error: 'no se pudo' };
+        } catch (e) {
+          const m = (e.motivo || '') + ' ' + (e.message || '');
+          if (m.indexOf('codigo-repetido') >= 0) return { error: 'Ese código ya existe' };
+          return { error: 'No se pudo crear la fiesta' };
+        }
+      },
+
+      /* SUPER · Crea (o actualiza) la cuenta de un admin (padre)
+         para una fiesta. Devuelve { ok, usuario } o null. */
+      async crearAdmin(nuevoUsuario, nuevaClave, fiestaId) {
+        try {
+          const r = await rpc('super_crear_admin', {
+            p_usuario:       this.usuario, p_clave: this.claveMaestra,
+            p_nuevo_usuario: nuevoUsuario, p_nueva_clave: nuevaClave,
+            p_fiesta:        fiestaId,
+          });
+          const d = Array.isArray(r) ? r[0] : r;
+          return (d && d.ok) ? d : null;
+        } catch (e) { return null; }
+      },
+
+      /* SUPER · Lista todos los admins (sin sus claves). */
+      async listarAdmins() {
+        try {
+          const r = await rpc('super_listar_admins', {
+            p_usuario: this.usuario, p_clave: this.claveMaestra,
+          });
+          return Array.isArray(r) ? r : [];
+        } catch (e) { return []; }
+      },
+
+      /* SUPER · Borra la cuenta de un admin por su id. */
+      async borrarAdmin(id) {
+        try {
+          await rpc('super_borrar_admin', {
+            p_usuario: this.usuario, p_clave: this.claveMaestra, p_id: id,
+          });
+          return true;
+        } catch (e) { return false; }
+      },
+
+      /* Entra a administrar UNA fiesta. Devuelve sus datos o null. */
       async entrar(codigo, clave) {
         try {
           const r = await rpc('admin_entrar', { p_codigo: codigo, p_clave: clave });
