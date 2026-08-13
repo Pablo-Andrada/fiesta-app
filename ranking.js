@@ -288,15 +288,18 @@ const Fiesta = (() => {
        limpiar_chat_si_vacio).
        ============================================================ */
 
-    /* Trae los mensajes mas nuevos (hasta 60) */
+    /* Trae los mensajes mas nuevos.
+       Usa una funcion del servidor que ADEMAS limpia la sala si
+       ya no queda nadie. Asi el chat se borra solo aunque el
+       ultimo celular no alcance a avisar que se fue. */
     async mensajes(desde) {
       if (!estado.online || !estado.fiestaId) return [];
       try {
-        let ruta = 'mensajes?fiesta_id=eq.' + estado.fiestaId +
-                   '&select=*&order=creado_el.desc&limit=60';
-        if (desde) ruta += '&creado_el=gt.' + encodeURIComponent(desde);
-        const filas = await api(ruta);
-        return (filas || []).reverse();   // los mas viejos primero
+        const r = await rpc('mensajes_de_fiesta', {
+          p_fiesta: estado.fiestaId,
+          p_desde:  desde || null,
+        });
+        return Array.isArray(r) ? r : [];
       } catch (e) { return []; }
     },
 
@@ -367,6 +370,72 @@ const Fiesta = (() => {
           keepalive: true,          // permite que salga aunque se cierre la pestana
         });
       } catch (e) {}
+    },
+
+    /* ============================================================
+       PANEL DE ADMINISTRADOR
+       ------------------------------------------------------------
+       Todo pide la clave de admin, que se verifica en el SERVIDOR.
+       La clave nunca queda expuesta: solo se manda para validar.
+       ============================================================ */
+    admin: {
+      clave: null,
+      fiestaId: null,
+
+      /* Entra al panel. Devuelve los datos de la fiesta o null. */
+      async entrar(codigo, clave) {
+        try {
+          const r = await rpc('admin_entrar', { p_codigo: codigo, p_clave: clave });
+          const d = Array.isArray(r) ? r[0] : r;
+          if (!d || !d.fiesta_id) return null;
+          this.clave = clave;
+          this.fiestaId = d.fiesta_id;
+          return d;
+        } catch (e) { return null; }
+      },
+
+      salir() { this.clave = null; this.fiestaId = null; },
+
+      /* Lista de jugadores con sus datos para moderar */
+      async jugadores() {
+        try {
+          const r = await rpc('admin_jugadores', { p_fiesta: this.fiestaId, p_clave: this.clave });
+          return Array.isArray(r) ? r : [];
+        } catch (e) { return []; }
+      },
+
+      async borrarJugador(id) {
+        try { await rpc('admin_borrar_jugador', { p_fiesta:this.fiestaId, p_clave:this.clave, p_jugador:id }); return true; }
+        catch (e) { return false; }
+      },
+
+      async limpiarChat() {
+        try { await rpc('admin_limpiar_chat', { p_fiesta:this.fiestaId, p_clave:this.clave }); return true; }
+        catch (e) { return false; }
+      },
+
+      async resetearPuntajes() {
+        try { await rpc('admin_resetear_puntajes', { p_fiesta:this.fiestaId, p_clave:this.clave }); return true; }
+        catch (e) { return false; }
+      },
+
+      async activarFiesta(activa) {
+        try { await rpc('admin_activar_fiesta', { p_fiesta:this.fiestaId, p_clave:this.clave, p_activa:activa }); return true; }
+        catch (e) { return false; }
+      },
+
+      /* Crea una fiesta nueva (para tus proximos clientes) */
+      async crearFiesta(codigo, nombre, festejado, claveNueva, dias) {
+        try {
+          const r = await rpc('admin_crear_fiesta', {
+            p_clave_maestra: this.clave,
+            p_codigo: codigo, p_nombre: nombre, p_festejado: festejado,
+            p_clave_admin: claveNueva, p_dias: dias || 30,
+          });
+          const d = Array.isArray(r) ? r[0] : r;
+          return d && d.codigo ? d : null;
+        } catch (e) { return null; }
+      },
     },
 
     sesionGuardada() { return local.leer('sesion', null); },

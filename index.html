@@ -188,12 +188,100 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .chat-form input::placeholder{ color:#8b6bb0; font-weight:600 }
 .chat-vacio{ text-align:center; color:var(--muted); font-weight:600; padding:30px 12px; font-size:14px; line-height:1.5 }
 
+/* ----------------------------------------------------------------
+   PANEL DE ADMINISTRADOR
+   ---------------------------------------------------------------- */
+#adminPanel{ position:fixed; inset:0; z-index:120; display:none; overflow-y:auto;
+  background:radial-gradient(900px 500px at 50% 0%, rgba(255,46,154,.25), transparent 60%), var(--bg); padding:20px 16px 40px }
+#adminPanel.open{ display:block }
+.adm-caja{ max-width:520px; margin:0 auto }
+.adm-tit{ text-align:center; font-family:"Bangers",cursive; font-size:36px; color:var(--magenta);
+  text-shadow:2px 2px 0 var(--ink), 0 0 18px rgba(255,46,154,.5); margin:10px 0 4px }
+.adm-sub{ text-align:center; color:var(--muted); font-weight:600; font-size:13px; margin-bottom:18px }
+.adm-campo{ width:100%; font-family:"Baloo 2"; font-weight:700; font-size:15px; color:var(--text);
+  background:var(--panel2); border:3px solid var(--ink); border-radius:14px; padding:11px 14px; margin-bottom:10px }
+.adm-campo::placeholder{ color:#8b6bb0; font-weight:600 }
+.adm-fila{ display:flex; align-items:center; gap:10px; border:3px solid var(--ink); border-radius:14px; padding:10px 12px;
+  margin-bottom:8px; background:linear-gradient(150deg,var(--panel),var(--panel2)) }
+.adm-fila .ava{ font-size:24px }
+.adm-fila .datos{ flex:1; min-width:0 }
+.adm-fila .nom{ font-weight:800; font-size:15px }
+.adm-fila .det{ font-size:11px; color:var(--muted); font-weight:600 }
+.adm-fila .pun{ font-size:11px; font-weight:800; padding:3px 8px; border-radius:999px; border:2px solid var(--ink) }
+.adm-fila .on{ background:var(--lime); color:var(--ink) }
+.adm-fila .off{ background:var(--panel2); color:var(--muted) }
+.adm-x{ background:var(--magenta); color:#fff; border:3px solid var(--ink); border-radius:10px;
+  width:34px; height:34px; font-family:"Baloo 2"; font-weight:800; cursor:pointer; flex:0 0 auto }
+.adm-seccion{ margin-top:22px; border-top:2px solid var(--panel2); padding-top:16px }
+.adm-seccion h3{ font-family:"Bangers",cursive; letter-spacing:1px; color:var(--cyan); font-size:22px; margin:0 0 10px }
+.adm-acciones{ display:flex; flex-wrap:wrap; gap:8px }
+.adm-err{ color:var(--magenta); font-weight:700; font-size:13px; min-height:20px; text-align:center }
+.adm-ok{ color:var(--lime); font-weight:700; font-size:13px; min-height:20px; text-align:center }
+.adm-stats{ display:flex; gap:8px; justify-content:center; margin-bottom:14px; flex-wrap:wrap }
+.adm-stat{ background:var(--panel2); border:2px solid var(--ink); border-radius:12px; padding:6px 12px; font-weight:800; font-size:13px }
+
 #confetti{ position:fixed; inset:0; pointer-events:none; z-index:90 }
 @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important } }
 </style>
 </head>
 <body>
 <canvas id="confetti"></canvas>
+
+<!-- ================================================================
+     PANEL DE ADMINISTRADOR
+     Se abre con el boton 🛠 (solo lo ve quien sabe la clave).
+     ================================================================ -->
+<div id="adminPanel">
+  <div class="adm-caja">
+    <div class="adm-tit">🛠 PANEL ADMIN</div>
+    <p class="adm-sub" id="admSub">Ingresá la clave para administrar la fiesta</p>
+
+    <!-- Paso 1: clave -->
+    <div id="admLogin">
+      <input class="adm-campo" id="admCodigo" placeholder="Código de la fiesta" autocomplete="off">
+      <input class="adm-campo" id="admClave" type="password" placeholder="Clave de admin" autocomplete="off">
+      <div class="adm-err" id="admErr"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn alt" id="admEntrar" style="flex:1">Entrar</button>
+        <button class="btn" id="admCerrar">Salir</button>
+      </div>
+    </div>
+
+    <!-- Paso 2: herramientas -->
+    <div id="admHerramientas" style="display:none">
+      <div class="adm-stats" id="admStats"></div>
+      <div class="adm-ok" id="admOk"></div>
+
+      <div class="adm-seccion">
+        <h3>👥 Jugadores</h3>
+        <div id="admJugadores"></div>
+      </div>
+
+      <div class="adm-seccion">
+        <h3>🧹 Limpieza</h3>
+        <div class="adm-acciones">
+          <button class="btn" id="admLimpiarChat">Vaciar chat</button>
+          <button class="btn" id="admResetPuntos">Resetear puntajes</button>
+          <button class="btn danger" id="admCerrarFiesta">Cerrar fiesta</button>
+          <button class="btn alt" id="admAbrirFiesta">Reabrir fiesta</button>
+        </div>
+      </div>
+
+      <div class="adm-seccion">
+        <h3>🎉 Nueva fiesta</h3>
+        <input class="adm-campo" id="admNvCodigo" placeholder="Código nuevo (ej: SOFI2026)" autocomplete="off">
+        <input class="adm-campo" id="admNvNombre" placeholder="Nombre (ej: Cumple de Sofi)" autocomplete="off">
+        <input class="adm-campo" id="admNvFestejado" placeholder="Festejado/a (ej: Sofi)" autocomplete="off">
+        <input class="adm-campo" id="admNvClave" placeholder="Clave de admin para esa fiesta" autocomplete="off">
+        <button class="btn alt" id="admCrear" style="width:100%">Crear fiesta</button>
+      </div>
+
+      <div class="adm-seccion" style="text-align:center">
+        <button class="btn" id="admSalir">Cerrar panel</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ================================================================
      PANTALLA DE ENTRADA
@@ -235,6 +323,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div style="display:flex;gap:8px;align-items:center">
       <button id="btnSonido" class="chip on" style="cursor:pointer;font-family:'Baloo 2';font-size:16px;padding:5px 12px">🔊</button>
       <button id="btnCambiar" class="chip off" style="cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px" title="Cambiar de jugador">👤</button>
+      <button id="btnAdmin" class="chip off" style="cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px" title="Panel de administrador">🛠</button>
       <span class="chip off" id="chipConexion">local</span>
     </div>
   </div>
@@ -388,7 +477,7 @@ function mostrarApp(){
     document.getElementById('subJuegos').textContent=Fiesta.estado.fiesta.nombre;
   }
   renderJuegos();
-  Fiesta.latido();                     // avisa que entro a la sala
+  iniciarLatido();                     // empieza a avisar que esta conectado
 }
 
 /* Boton para cambiar de jugador en este navegador */
@@ -476,19 +565,33 @@ async function cargarRanking(){
    - Al salir avisa que se fue; si era el ultimo, el servidor
      borra toda la conversacion.
    ================================================================ */
-let chatTimer=null, latidoTimer=null, ultimoMensaje=null, mensajesEnPantalla=[];
+let chatTimer=null, latidoGlobal=null, ultimoMensaje=null, mensajesEnPantalla=[];
+
+/* LATIDO GLOBAL
+   Avisa "sigo conectado" cada 12 segundos mientras la app este
+   abierta, sin importar en que solapa estes.
+   Antes solo latia dentro del Chat, y por eso al que estaba
+   jugando lo daban por desconectado: la sala parecia vacia
+   cuando en realidad habia gente, y la charla no se borraba
+   en el momento correcto. */
+function iniciarLatido(){
+  if(latidoGlobal) return;
+  Fiesta.latido();
+  latidoGlobal=setInterval(function(){
+    // Si la app esta en segundo plano, no hace falta latir
+    if(document.hidden) return;
+    Fiesta.latido();
+  }, 12000);
+}
 
 function iniciarChat(){
   if(chatTimer) return;
   cargarMensajes(true);
   refrescarConectados();
-  chatTimer   = setInterval(()=>{ cargarMensajes(false); }, 2000);
-  latidoTimer = setInterval(()=>{ Fiesta.latido(); refrescarConectados(); }, 10000);
-  Fiesta.latido();
+  chatTimer = setInterval(function(){ cargarMensajes(false); refrescarConectados(); }, 2000);
 }
 function frenarChat(){
   if(chatTimer){ clearInterval(chatTimer); chatTimer=null; }
-  if(latidoTimer){ clearInterval(latidoTimer); latidoTimer=null; }
 }
 
 async function cargarMensajes(primeraVez){
@@ -497,13 +600,21 @@ async function cargarMensajes(primeraVez){
     cont.innerHTML='<div class="chat-vacio">El chat necesita conexión a internet.<br>Los juegos funcionan igual 🎮</div>';
     return;
   }
-  const nuevos=await Fiesta.mensajes(primeraVez ? null : ultimoMensaje);
-  if(primeraVez) mensajesEnPantalla=[];
+  // Cada tanto pedimos TODO de nuevo: asi nos enteramos si el
+  // servidor limpio la sala (porque quedo vacia) y borramos
+  // tambien lo que quedo en pantalla.
+  const recargaCompleta = primeraVez || (Date.now() % 30000 < 2000);
+  const nuevos=await Fiesta.mensajes(recargaCompleta ? null : ultimoMensaje);
+
+  if(recargaCompleta){
+    mensajesEnPantalla = nuevos.slice(-80);
+    ultimoMensaje = nuevos.length ? nuevos[nuevos.length-1].creado_el : null;
+    pintarMensajes();
+    return;
+  }
   if(nuevos.length){
     mensajesEnPantalla=mensajesEnPantalla.concat(nuevos).slice(-80);
     ultimoMensaje=nuevos[nuevos.length-1].creado_el;
-    pintarMensajes();
-  } else if(primeraVez){
     pintarMensajes();
   }
 }
@@ -564,6 +675,118 @@ document.getElementById('inpMensaje').addEventListener('keydown',function(e){
 
 /* Al cerrar la app avisamos que nos fuimos */
 addEventListener('pagehide', function(){ Fiesta.salirDelChat(); });
+
+/* ================================================================
+   PANEL DE ADMINISTRADOR
+   ------------------------------------------------------------------
+   Sirve para moderar la fiesta: borrar jugadores molestos,
+   vaciar el chat, resetear el ranking, cerrar la sala o crear
+   una fiesta nueva.
+   La clave se verifica SIEMPRE en el servidor.
+   ================================================================ */
+const admPanel=document.getElementById('adminPanel');
+
+document.getElementById('btnAdmin').onclick=function(){
+  admPanel.classList.add('open');
+  document.getElementById('admCodigo').value = Fiesta.estado.fiesta ? Fiesta.estado.fiesta.codigo : '';
+};
+document.getElementById('admCerrar').onclick=function(){ admPanel.classList.remove('open'); };
+document.getElementById('admSalir').onclick=function(){
+  Fiesta.admin.salir();
+  document.getElementById('admHerramientas').style.display='none';
+  document.getElementById('admLogin').style.display='block';
+  document.getElementById('admClave').value='';
+  admPanel.classList.remove('open');
+};
+
+document.getElementById('admEntrar').onclick=async function(){
+  const cod=document.getElementById('admCodigo').value.trim();
+  const cla=document.getElementById('admClave').value;
+  const err=document.getElementById('admErr');
+  if(!cod || !cla){ err.textContent='Completá código y clave'; return; }
+  err.textContent='Verificando…';
+  const d=await Fiesta.admin.entrar(cod, cla);
+  if(!d){ err.textContent='Código o clave incorrectos'; return; }
+  err.textContent='';
+  document.getElementById('admLogin').style.display='none';
+  document.getElementById('admHerramientas').style.display='block';
+  document.getElementById('admSub').textContent=d.nombre||'Administrando la fiesta';
+  pintarStats(d);
+  cargarJugadoresAdmin();
+};
+
+function pintarStats(d){
+  document.getElementById('admStats').innerHTML=
+    '<span class="adm-stat">👥 '+(d.jugadores||0)+' jugadores</span>'+
+    '<span class="adm-stat">💬 '+(d.mensajes||0)+' mensajes</span>';
+}
+
+function avisoAdmin(txt){
+  const o=document.getElementById('admOk');
+  o.textContent=txt;
+  setTimeout(function(){ o.textContent=''; }, 2500);
+}
+
+async function cargarJugadoresAdmin(){
+  const cont=document.getElementById('admJugadores');
+  cont.innerHTML='<div class="adm-sub">Cargando…</div>';
+  const lista=await Fiesta.admin.jugadores();
+  if(!lista.length){ cont.innerHTML='<div class="adm-sub">Todavía no entró nadie</div>'; return; }
+  cont.innerHTML=lista.map(function(j){
+    return '<div class="adm-fila">'+
+      '<div class="ava">'+escapar(j.avatar)+'</div>'+
+      '<div class="datos"><div class="nom">'+escapar(j.apodo)+'</div>'+
+      '<div class="det">💬 '+j.mensajes+' · ⭐ '+j.puntos+'</div></div>'+
+      '<span class="pun '+(j.conectado?'on':'off')+'">'+(j.conectado?'en línea':'ausente')+'</span>'+
+      '<button class="adm-x" data-id="'+j.id+'" title="Borrar jugador">✕</button></div>';
+  }).join('');
+  cont.querySelectorAll('.adm-x').forEach(function(b){
+    b.onclick=async function(){
+      if(!confirm('¿Borrar a este jugador?\n\nSe van a borrar sus mensajes y puntajes.')) return;
+      const ok=await Fiesta.admin.borrarJugador(b.dataset.id);
+      avisoAdmin(ok?'Jugador borrado':'No se pudo borrar');
+      cargarJugadoresAdmin();
+    };
+  });
+}
+
+document.getElementById('admLimpiarChat').onclick=async function(){
+  if(!confirm('¿Vaciar todo el chat?')) return;
+  const ok=await Fiesta.admin.limpiarChat();
+  avisoAdmin(ok?'Chat vaciado':'No se pudo');
+  mensajesEnPantalla=[]; ultimoMensaje=null; pintarMensajes();
+};
+
+document.getElementById('admResetPuntos').onclick=async function(){
+  if(!confirm('¿Resetear TODOS los puntajes?\n\nEl ranking vuelve a cero.')) return;
+  const ok=await Fiesta.admin.resetearPuntajes();
+  avisoAdmin(ok?'Puntajes reseteados':'No se pudo');
+};
+
+document.getElementById('admCerrarFiesta').onclick=async function(){
+  if(!confirm('¿Cerrar la fiesta?\n\nNo va a poder entrar nadie nuevo.')) return;
+  const ok=await Fiesta.admin.activarFiesta(false);
+  avisoAdmin(ok?'Fiesta cerrada':'No se pudo');
+};
+document.getElementById('admAbrirFiesta').onclick=async function(){
+  const ok=await Fiesta.admin.activarFiesta(true);
+  avisoAdmin(ok?'Fiesta reabierta':'No se pudo');
+};
+
+document.getElementById('admCrear').onclick=async function(){
+  const cod=document.getElementById('admNvCodigo').value.trim().toUpperCase();
+  const nom=document.getElementById('admNvNombre').value.trim();
+  const fes=document.getElementById('admNvFestejado').value.trim();
+  const cla=document.getElementById('admNvClave').value.trim();
+  if(!cod||!nom||!cla){ avisoAdmin('Faltan datos'); return; }
+  const r=await Fiesta.admin.crearFiesta(cod,nom,fes,cla,30);
+  if(r){
+    avisoAdmin('¡Fiesta '+r.codigo+' creada!');
+    ['admNvCodigo','admNvNombre','admNvFestejado','admNvClave'].forEach(function(id){
+      document.getElementById(id).value='';
+    });
+  } else avisoAdmin('No se pudo crear (¿código repetido?)');
+};
 
 /* ================================================================
    NAVEGACION
