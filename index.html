@@ -804,9 +804,18 @@ async function cargarMensajes(primeraVez){
     return;
   }
   if(nuevos.length){
-    mensajesEnPantalla=mensajesEnPantalla.concat(nuevos).slice(-80);
-    ultimoMensaje=nuevos[nuevos.length-1].creado_el;
-    pintarMensajes();
+    // Evitar DUPLICADOS: al enviar, la consulta manual y la
+    // automatica (cada 2s) pueden traer el mismo mensaje casi a la
+    // vez. Filtramos por id los que YA estan en pantalla, asi nunca
+    // se agrega dos veces (era lo que hacia "parpadear" el doble).
+    const yaEstan = new Set(mensajesEnPantalla.map(function(m){ return m.id; }));
+    const soloNuevos = nuevos.filter(function(m){ return !yaEstan.has(m.id); });
+    // Igual avanzamos el puntero, aunque no haya nada nuevo que pintar.
+    ultimoMensaje = nuevos[nuevos.length-1].creado_el;
+    if(soloNuevos.length){
+      mensajesEnPantalla = mensajesEnPantalla.concat(soloNuevos).slice(-80);
+      pintarMensajes();
+    }
   }
 }
 
