@@ -183,6 +183,37 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .msg.mio{ align-self:flex-end; flex-direction:row-reverse }
 .msg.mio .burbuja{ background:linear-gradient(150deg,var(--violet),#7a2fb0) }
 .msg.mio .quien{ color:var(--yellow); text-align:right }
+
+/* ---------- HOME / pantalla de bienvenida ---------- */
+.home-img-caja{ position:relative; border-radius:22px; overflow:hidden; border:4px solid var(--ink);
+  box-shadow:6px 6px 0 rgba(10,4,22,.55), 0 0 26px rgba(177,75,255,.35); margin-bottom:18px }
+.home-img-caja img{ display:block; width:100%; height:auto }
+.home-img-caja::after{ content:""; position:absolute; inset:0;
+  background:linear-gradient(180deg, transparent 55%, rgba(10,4,22,.45)); pointer-events:none }
+/* Titulo NEON */
+.home-neon{ text-align:center; font-family:"Bangers",cursive; letter-spacing:2px; line-height:1.05;
+  font-size:clamp(30px,9vw,46px); margin:6px 0 4px; transform:rotate(-1.5deg); color:#fff;
+  text-shadow:0 0 6px #fff, 0 0 12px var(--magenta), 0 0 22px var(--magenta), 0 0 40px var(--violet), 3px 3px 0 var(--ink);
+  animation:parpadeo 2.4s infinite; }
+.home-neon .anios{ display:block; color:var(--cyan); font-size:.82em; margin-top:2px;
+  text-shadow:0 0 6px #fff, 0 0 14px var(--cyan), 0 0 26px var(--cyan), 3px 3px 0 var(--ink);
+  animation:falla-anios 2.4s infinite; }
+.home-neon .anios:empty{ display:none }
+/* Microcortes del titulo (neon viejo mal conectado) */
+@keyframes parpadeo{
+  0%,40%{opacity:1} 42%{opacity:.55} 44%{opacity:1} 46%{opacity:.7} 48%{opacity:1}
+  70%{opacity:1} 72%{opacity:.6} 74%{opacity:1} 100%{opacity:1}
+}
+/* "Mis 10 años" falla mas feo: casi se apaga y vuelve */
+@keyframes falla-anios{
+  0%,55%{opacity:1} 57%{opacity:.08} 60%{opacity:.08} 62%{opacity:1} 63%{opacity:.3} 65%{opacity:1} 100%{opacity:1}
+}
+.home-bienvenida{ text-align:center; margin:16px auto 0; max-width:440px;
+  background:linear-gradient(150deg,var(--panel),var(--panel2)); border:3px solid var(--ink);
+  border-radius:18px; padding:16px 18px; box-shadow:4px 4px 0 rgba(10,4,22,.5) }
+.home-bienvenida .gracias{ font-size:clamp(18px,5.5vw,22px); font-weight:800; color:var(--yellow); margin:0 }
+.home-bienvenida .gracias .nombre{ color:var(--lime) }
+.home-bienvenida .jugar{ font-size:clamp(15px,4.5vw,18px); font-weight:700; color:var(--text); margin:8px 0 0 }
 .msg-x{ flex:0 0 auto; align-self:center; margin-left:4px; cursor:pointer;
   border:2px solid var(--magenta); background:rgba(255,60,120,.15); color:#ff6a9c;
   font-weight:800; border-radius:9px; width:26px; height:26px; line-height:1; font-size:13px }
@@ -267,6 +298,8 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
           <input class="adm-campo" id="admNvCodigo" placeholder="Código para invitados (ej: SOFI2026)" autocomplete="off">
           <input class="adm-campo" id="admNvNombre" placeholder="Nombre (ej: Cumple de Sofi)" autocomplete="off">
           <input class="adm-campo" id="admNvFestejado" placeholder="Festejado/a (ej: Sofi)" autocomplete="off">
+          <input class="adm-campo" id="admNvSub" placeholder="Subtítulo del home (ej: Mis 7 años!!)" autocomplete="off">
+          <input class="adm-campo" id="admNvImg" placeholder="Imagen del home (nombre del archivo o URL)" autocomplete="off">
           <input class="adm-campo" id="admNvDias" type="number" placeholder="Días de duración (ej: 30)" autocomplete="off">
           <input class="adm-campo" id="admNvUser" placeholder="Usuario del padre (ej: sofi_mama)" autocomplete="off">
           <input class="adm-campo" id="admNvPass" placeholder="Contraseña para el padre" autocomplete="off">
@@ -371,8 +404,23 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     </div>
   </div>
 
+  <!-- ===== INICIO (HOME de bienvenida) ===== -->
+  <section class="tab active" id="tab-inicio">
+    <div class="home-img-caja" id="homeImgCaja">
+      <img id="homeFoto" alt="Bienvenido a la fiesta">
+    </div>
+    <h1 class="home-neon" id="homeTitulo">
+      <span id="homeNombreFiesta">¡Bienvenidos a la fiesta!</span>
+      <span class="anios" id="homeSub"></span>
+    </h1>
+    <div class="home-bienvenida">
+      <p class="gracias">Gracias por venir <span class="nombre" id="homeApodo"></span>!!</p>
+      <p class="jugar">Juguemos juntos y vemos quién gana!! 🎮🏆</p>
+    </div>
+  </section>
+
   <!-- ===== JUEGOS ===== -->
-  <section class="tab active" id="tab-juegos">
+  <section class="tab" id="tab-juegos">
     <h2 class="sec-title">🕹️ JUEGOS</h2>
     <p class="sec-sub" id="subJuegos">Jugá y sumá puntos para el ranking</p>
     <div class="games" id="grillaJuegos"></div>
@@ -403,7 +451,8 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 </div>
 
 <nav class="tabbar" id="tabbar" style="display:none">
-  <button class="active" data-tab="juegos"><span class="ti">🕹️</span>Juegos</button>
+  <button class="active" data-tab="inicio"><span class="ti">🏠</span>Inicio</button>
+  <button data-tab="juegos"><span class="ti">🕹️</span>Juegos</button>
   <button data-tab="chat"><span class="ti">💬</span>Chat</button>
   <button data-tab="ranking"><span class="ti">🏆</span>Ranking</button>
 </nav>
@@ -536,8 +585,34 @@ function mostrarApp(){
   if(Fiesta.estado.fiesta && Fiesta.estado.fiesta.nombre){
     document.getElementById('subJuegos').textContent=Fiesta.estado.fiesta.nombre;
   }
+  pintarHome();
   renderJuegos();
   iniciarLatido();                     // empieza a avisar que esta conectado
+  // Al entrar, arrancamos siempre en el HOME de bienvenida.
+  if(!esModerador) showTab('inicio');
+}
+
+/* Rellena la pantalla de bienvenida con los datos de la fiesta
+   (titulo, subtitulo e imagen los trae cada fiesta) y el apodo
+   del jugador. Asi el HOME es distinto para cada cliente. */
+function pintarHome(){
+  const f = Fiesta.estado.fiesta || {};
+  // Titulo y subtitulo (en neon)
+  document.getElementById('homeNombreFiesta').textContent = f.nombre || '¡Bienvenidos a la fiesta!';
+  document.getElementById('homeSub').textContent = f.subtitulo || '';
+  // Apodo del jugador en el saludo
+  document.getElementById('homeApodo').textContent = Fiesta.estado.apodo || '';
+  // Imagen: si la fiesta tiene una, la mostramos; si falla al
+  // cargar (todavia no la subieron), ocultamos la caja sin error.
+  const caja = document.getElementById('homeImgCaja');
+  const foto = document.getElementById('homeFoto');
+  if(f.imagen_url){
+    foto.onerror = function(){ caja.style.display='none'; };
+    foto.onload  = function(){ caja.style.display='block'; };
+    foto.src = f.imagen_url;
+  } else {
+    caja.style.display='none';
+  }
 }
 
 /* Boton para cambiar de jugador en este navegador (borra la sesion) */
@@ -1068,6 +1143,8 @@ document.getElementById('admCrear').onclick=async function(){
   const cod =document.getElementById('admNvCodigo').value.trim().toUpperCase();
   const nom =document.getElementById('admNvNombre').value.trim();
   const fes =document.getElementById('admNvFestejado').value.trim();
+  const sub =document.getElementById('admNvSub').value.trim();
+  const img =document.getElementById('admNvImg').value.trim();
   const dias=parseInt(document.getElementById('admNvDias').value,10)||30;
   const user=document.getElementById('admNvUser').value.trim().toLowerCase();
   const pass=document.getElementById('admNvPass').value.trim();
@@ -1083,7 +1160,7 @@ document.getElementById('admCrear').onclick=async function(){
   const btn=this; btn.disabled=true; const txt=btn.textContent; btn.textContent='Creando…';
 
   // 1) Crear la fiesta
-  const f=await Fiesta.admin.crearFiestaSuper(cod, nom, fes, dias);
+  const f=await Fiesta.admin.crearFiestaSuper(cod, nom, fes, dias, sub, img);
   if(f.error){
     box.style.display='block'; box.style.borderColor='var(--magenta)';
     box.innerHTML='No se pudo crear la fiesta: '+escapar(f.error);
@@ -1111,7 +1188,7 @@ document.getElementById('admCrear').onclick=async function(){
     '<span class="dato">🔑 Contraseña: <b>'+escapar(pass)+'</b></span>';
 
   // Limpiar el formulario y refrescar la lista
-  ['admNvCodigo','admNvNombre','admNvFestejado','admNvDias','admNvUser','admNvPass']
+  ['admNvCodigo','admNvNombre','admNvFestejado','admNvSub','admNvImg','admNvDias','admNvUser','admNvPass']
     .forEach(function(id){ document.getElementById(id).value=''; });
   const r=await Fiesta.admin.entrarMaestro(Fiesta.admin.usuario, Fiesta.admin.claveMaestra);
   if(r){ fiestasAdmin=r.fiestas||[]; }

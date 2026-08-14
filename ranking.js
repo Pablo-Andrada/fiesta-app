@@ -410,12 +410,15 @@ const Fiesta = (() => {
       /* SUPER · Crea una fiesta nueva. El servidor le pone una
          clave interna aleatoria. Devuelve { id, codigo, clave_admin }
          o { error } si algo fallo (ej: codigo repetido). */
-      async crearFiestaSuper(codigo, nombre, festejado, dias) {
+      async crearFiestaSuper(codigo, nombre, festejado, dias, subtitulo, imagen) {
         try {
           const r = await rpc('super_crear_fiesta', {
             p_usuario:   this.usuario, p_clave: this.claveMaestra,
             p_codigo:    codigo, p_nombre: nombre,
-            p_festejado: festejado, p_dias: dias || 30,
+            p_festejado: festejado,
+            p_subtitulo: subtitulo || null,
+            p_imagen:    imagen || null,
+            p_dias:      dias || 30,
           });
           const d = Array.isArray(r) ? r[0] : r;
           return (d && d.id) ? d : { error: 'no se pudo' };
