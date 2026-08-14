@@ -183,6 +183,10 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .msg.mio{ align-self:flex-end; flex-direction:row-reverse }
 .msg.mio .burbuja{ background:linear-gradient(150deg,var(--violet),#7a2fb0) }
 .msg.mio .quien{ color:var(--yellow); text-align:right }
+.msg-x{ flex:0 0 auto; align-self:center; margin-left:4px; cursor:pointer;
+  border:2px solid var(--magenta); background:rgba(255,60,120,.15); color:#ff6a9c;
+  font-weight:800; border-radius:9px; width:26px; height:26px; line-height:1; font-size:13px }
+.msg-x:hover{ background:var(--magenta); color:#fff }
 .chat-form{ display:flex; gap:8px; padding-top:10px }
 .chat-form input{ flex:1; font-family:"Baloo 2"; font-weight:700; font-size:15px; color:var(--text); background:var(--panel2); border:3px solid var(--ink); border-radius:14px; padding:11px 14px; min-width:0 }
 .chat-form input::placeholder{ color:#8b6bb0; font-weight:600 }
@@ -286,6 +290,11 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
       <div class="adm-stats" id="admStats"></div>
       <div class="adm-ok" id="admOk"></div>
 
+      <div class="adm-seccion" style="text-align:center">
+        <button class="btn alt" id="admEntrarFiesta" style="width:100%">🎉 Entrar a la fiesta (ver juegos y chat)</button>
+        <p class="adm-sub" style="margin:8px 0 0">Entrás como moderador: ves todo y podés borrar mensajes del chat.</p>
+      </div>
+
       <div class="adm-seccion">
         <h3>👥 Jugadores</h3>
         <div id="admJugadores"></div>
@@ -318,6 +327,13 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div style="font-size:52px">🎉</div>
     <h1 id="entTitulo">¡BIENVENIDO<br>A LA FIESTA!</h1>
 
+    <!-- Banner para RETOMAR la sesion (aparece solo si ya jugaste
+         antes en este celular y saliste sin cambiar de jugador). -->
+    <div id="retomar" style="display:none;margin:0 0 14px">
+      <button class="btn alt" id="btnRetomar" style="width:100%">Seguir en la fiesta 👉</button>
+      <p class="tip" style="margin-top:6px">Vas a volver como <b id="retomarNom"></b></p>
+    </div>
+
     <!-- Paso 1 -->
     <div class="paso on" id="paso1">
       <p class="sub">Escribí el código que está en tu tarjetita</p>
@@ -349,6 +365,8 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div style="display:flex;gap:8px;align-items:center">
       <button id="btnSonido" class="chip on" style="cursor:pointer;font-family:'Baloo 2';font-size:16px;padding:5px 12px">🔊</button>
       <button id="btnCambiar" class="chip off" style="cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px" title="Cambiar de jugador">👤</button>
+      <button id="btnSalir" class="chip off" style="cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px" title="Salir (sin perder tu progreso)">🚪 Salir</button>
+      <button id="btnSalirMod" class="chip off" style="display:none;cursor:pointer;font-family:'Baloo 2';font-size:11px;padding:5px 10px;white-space:nowrap" title="Volver al panel de admin">🚪 Salir</button>
       <span class="chip off" id="chipConexion">local</span>
     </div>
   </div>
@@ -478,6 +496,12 @@ async function validarCodigo(){
   aviso.textContent='Buscando…';
   const fiesta=await Fiesta.buscarFiesta(cod);
   if(!fiesta){ aviso.textContent='Ese código no existe o la fiesta ya terminó'; return; }
+  // La fiesta puede estar cerrada por el admin o haber vencido (dias de duracion).
+  const vencida = fiesta.expira_el && (new Date(fiesta.expira_el) < new Date());
+  if(fiesta.activa===false || vencida){
+    aviso.textContent='Esta fiesta ya terminó 🎉 ¡Gracias por venir!';
+    return;
+  }
   aviso.textContent='';
   if(fiesta.festejado) document.getElementById('entTitulo').innerHTML='¡CUMPLE DE<br>'+fiesta.festejado.toUpperCase()+'!';
   document.getElementById('paso1').classList.remove('on');
@@ -516,12 +540,56 @@ function mostrarApp(){
   iniciarLatido();                     // empieza a avisar que esta conectado
 }
 
-/* Boton para cambiar de jugador en este navegador */
+/* Boton para cambiar de jugador en este navegador (borra la sesion) */
 document.getElementById('btnCambiar').onclick=function(){
   if(confirm('¿Querés entrar con otro jugador?\n\nVas a perder el progreso guardado en este celular.')){
     Fiesta.olvidarSesion();
     location.reload();
   }
+};
+
+/* SALIR sin perder el progreso.
+   Deja la sesion guardada, avisa que nos fuimos del chat (para
+   que la sala se pueda limpiar) y vuelve a la pantalla de inicio.
+   Al volver, el boton "Seguir en la fiesta" te devuelve donde
+   estabas, con el mismo apodo y puntajes. */
+function salirDeLaApp(){
+  frenarChat();
+  if(latidoGlobal){ clearInterval(latidoGlobal); latidoGlobal=null; }
+  Fiesta.salirDelChat();
+  document.getElementById('appMain').style.display='none';
+  document.getElementById('tabbar').style.display='none';
+  document.getElementById('entrada').style.display='flex';
+  mostrarBotonRetomar();
+}
+document.getElementById('btnSalir').onclick=salirDeLaApp;
+
+/* Muestra el banner "Seguir en la fiesta" si hay una sesion
+   guardada en este celular. */
+function mostrarBotonRetomar(){
+  const ses=Fiesta.sesionGuardada();
+  const box=document.getElementById('retomar');
+  if(ses && ses.apodo){
+    document.getElementById('retomarNom').textContent=(ses.avatar||'')+' '+ses.apodo;
+    box.style.display='block';
+  } else {
+    box.style.display='none';
+  }
+}
+
+/* Al tocar "Seguir en la fiesta": retoma la sesion y entra. */
+document.getElementById('btnRetomar').onclick=async function(){
+  this.disabled=true; this.textContent='Entrando…';
+  if(await Fiesta.retomarSesion()){
+    avatarElegido = Fiesta.estado.avatar;
+    mostrarApp();
+  } else {
+    // La sesion ya no sirve (ej: la fiesta vencio o se cerro)
+    document.getElementById('aviso1').textContent='No se pudo retomar. La fiesta puede haber terminado.';
+    Fiesta.olvidarSesion();
+    document.getElementById('retomar').style.display='none';
+  }
+  this.disabled=false; this.textContent='Seguir en la fiesta 👉';
 };
 
 /* Boton para prender / apagar el sonido */
@@ -602,6 +670,8 @@ async function cargarRanking(){
      borra toda la conversacion.
    ================================================================ */
 let chatTimer=null, latidoGlobal=null, ultimoMensaje=null, mensajesEnPantalla=[];
+let esModerador=false;      // true cuando un admin entra a la fiesta a moderar
+let modFiesta=null;         // {id, codigo, clave, nombre} de la fiesta que modera
 
 /* LATIDO GLOBAL
    Avisa "sigo conectado" cada 12 segundos mientras la app este
@@ -612,6 +682,7 @@ let chatTimer=null, latidoGlobal=null, ultimoMensaje=null, mensajesEnPantalla=[]
    en el momento correcto. */
 function iniciarLatido(){
   if(latidoGlobal) return;
+  if(esModerador) return;   // el moderador observa, no cuenta como jugador conectado
   Fiesta.latido();
   latidoGlobal=setInterval(function(){
     // Si la app esta en segundo plano, no hace falta latir
@@ -636,6 +707,15 @@ async function cargarMensajes(primeraVez){
     cont.innerHTML='<div class="chat-vacio">El chat necesita conexión a internet.<br>Los juegos funcionan igual 🎮</div>';
     return;
   }
+
+  // MODO MODERADOR: lee con la funcion de admin, que NO borra la
+  // sala aunque este vacia, para poder moderar tranquilo.
+  if(esModerador){
+    mensajesEnPantalla = (await Fiesta.admin.mensajesModerar()).slice(-200);
+    pintarMensajes();
+    return;
+  }
+
   // Cada tanto pedimos TODO de nuevo: asi nos enteramos si el
   // servidor limpio la sala (porque quedo vacia) y borramos
   // tambien lo que quedo en pantalla.
@@ -658,17 +738,32 @@ async function cargarMensajes(primeraVez){
 function pintarMensajes(){
   const cont=document.getElementById('mensajes');
   if(!mensajesEnPantalla.length){
-    cont.innerHTML='<div class="chat-vacio">Todavía no habló nadie 👀<br>¡Escribí el primer mensaje!</div>';
+    cont.innerHTML=esModerador
+      ? '<div class="chat-vacio">No hay mensajes en el chat 👀</div>'
+      : '<div class="chat-vacio">Todavía no habló nadie 👀<br>¡Escribí el primer mensaje!</div>';
     return;
   }
   const abajo=cont.scrollHeight-cont.scrollTop-cont.clientHeight < 60;
   cont.innerHTML=mensajesEnPantalla.map(m=>{
     const mio=m.apodo===Fiesta.estado.apodo;
+    // En modo moderador cada mensaje tiene un boton para borrarlo.
+    const x = esModerador
+      ? '<button class="msg-x" data-id="'+escapar(m.id)+'" title="Borrar este mensaje">✕</button>'
+      : '';
     return '<div class="msg '+(mio?'mio':'')+'">'+
       '<div class="ava">'+escapar(m.avatar)+'</div>'+
       '<div class="burbuja"><div class="quien">'+escapar(m.apodo)+'</div>'+
-      '<div class="texto">'+escapar(m.texto)+'</div></div></div>';
+      '<div class="texto">'+escapar(m.texto)+'</div></div>'+x+'</div>';
   }).join('');
+  if(esModerador){
+    cont.querySelectorAll('.msg-x').forEach(function(b){
+      b.onclick=async function(){
+        b.disabled=true;
+        const ok=await Fiesta.admin.borrarMensaje(b.dataset.id);
+        if(ok) cargarMensajes(true); else b.disabled=false;
+      };
+    });
+  }
   if(abajo) cont.scrollTop=cont.scrollHeight;
 }
 
@@ -841,9 +936,11 @@ async function cargarListaAdmins(){
 /* PASO 3 · Abrir las herramientas de UNA fiesta.
    Reusa el login por fiesta que ya existia (la clave ya la
    tenemos de la lista, asi que no hay que escribir nada mas). */
+let fiestaAdminActual=null;   // {id, codigo, clave, nombre} que se administra ahora
 async function abrirHerramientas(codigo, clave){
   const d=await Fiesta.admin.entrar(codigo, clave);
   if(!d){ alert('No se pudo abrir esa fiesta'); return; }
+  fiestaAdminActual={ id:d.fiesta_id, codigo:codigo, clave:clave, nombre:d.nombre };
   document.getElementById('admLoginMaestro').style.display='none';
   document.getElementById('admFiestas').style.display='none';
   document.getElementById('admHerramientas').style.display='block';
@@ -856,6 +953,53 @@ async function abrirHerramientas(codigo, clave){
 document.getElementById('admVolverFiestas').onclick=function(){
   Fiesta.admin.salir();
   mostrarListaFiestas();
+};
+
+/* ================================================================
+   MODO MODERADOR · el admin entra a la fiesta a ver y moderar
+   ================================================================ */
+document.getElementById('admEntrarFiesta').onclick=function(){
+  const f=fiestaAdminActual;
+  if(!f){ return; }
+  esModerador=true;
+  modFiesta=f;
+  // Preparamos el estado como si observaramos la fiesta.
+  Fiesta.estado.online   = true;
+  Fiesta.estado.fiestaId = f.id;
+  Fiesta.estado.fiesta   = { id:f.id, codigo:f.codigo, nombre:f.nombre };
+  Fiesta.estado.apodo    = '🛠 Moderador';
+  Fiesta.estado.avatar   = '🛠';
+  Fiesta.estado.token    = null;
+  Fiesta.estado.jugadorId= null;
+  admPanel.classList.remove('open');
+  aplicarModoModerador(true);
+  mostrarApp();
+  showTab('chat');   // arranca directo en el chat, que es lo que mas se modera
+};
+
+/* Prende / apaga la vista de moderador (botones de la topbar y
+   el formulario de escribir del chat). */
+function aplicarModoModerador(activo){
+  document.getElementById('btnCambiar').style.display   = activo ? 'none' : '';
+  document.getElementById('btnSalir').style.display     = activo ? 'none' : '';
+  document.getElementById('btnSalirMod').style.display  = activo ? '' : 'none';
+  // El moderador no escribe en el chat: solo lee y borra.
+  const form=document.querySelector('.chat-form');
+  if(form) form.style.display = activo ? 'none' : 'flex';
+}
+
+/* Salir del modo moderador: vuelve al panel, a las herramientas
+   de la misma fiesta. */
+document.getElementById('btnSalirMod').onclick=function(){
+  frenarChat();
+  esModerador=false;
+  aplicarModoModerador(false);
+  Fiesta.estado.apodo=null; Fiesta.estado.avatar=null;
+  Fiesta.estado.fiesta=null; Fiesta.estado.fiestaId=null;
+  document.getElementById('appMain').style.display='none';
+  document.getElementById('tabbar').style.display='none';
+  admPanel.classList.add('open');
+  if(modFiesta) abrirHerramientas(modFiesta.codigo, modFiesta.clave);
 };
 
 function pintarStats(d){

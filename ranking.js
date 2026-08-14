@@ -474,6 +474,23 @@ const Fiesta = (() => {
 
       salir() { this.clave = null; this.fiestaId = null; },
 
+      /* MODERACION DE CHAT
+         Lee los mensajes de la fiesta SIN limpiar la sala (a
+         diferencia del chat normal, que se borra solo cuando
+         queda vacia). Asi el admin puede moderar tranquilo. */
+      async mensajesModerar() {
+        try {
+          const r = await rpc('admin_mensajes', { p_fiesta:this.fiestaId, p_clave:this.clave });
+          return Array.isArray(r) ? r : [];
+        } catch (e) { return []; }
+      },
+
+      /* Borra un mensaje puntual del chat. */
+      async borrarMensaje(id) {
+        try { await rpc('admin_borrar_mensaje', { p_fiesta:this.fiestaId, p_clave:this.clave, p_id:id }); return true; }
+        catch (e) { return false; }
+      },
+
       /* Lista de jugadores con sus datos para moderar */
       async jugadores() {
         try {
