@@ -2548,13 +2548,24 @@ function Frutas(el){
     if(trazo.length>14) trazo.shift();
 
     if(ultimo){
-      // Revisamos el segmento recorrido, no solo el punto actual
+      // Revisamos el segmento recorrido, no solo el punto actual.
       for(let i=objetos.length-1;i>=0;i--){
         const o=objetos[i];
-        if(distanciaASegmento(o.x,o.y, ultimo.x,ultimo.y, p.x,p.y) < o.r+6){
-          const ang=Math.atan2(p.y-ultimo.y, p.x-ultimo.x);
+        const ang=Math.atan2(p.y-ultimo.y, p.x-ultimo.x);
+        if(o.bomba){
+          // La BOMBA solo explota si el dedo pasa REALMENTE por encima.
+          // Antes, un swipe rapido para cortar frutas dibujaba un
+          // segmento largo que "rozaba" la bomba de lejos y la hacia
+          // explotar sin haberla tocado (parecia que la bomba te mataba
+          // sola al caer). Ahora exigimos que el dedo este SOBRE la
+          // bomba: no alcanza con que la linea pase cerca.
+          if(Math.hypot(o.x-p.x, o.y-p.y) < o.r){
+            cortar(o, i, ang);
+            if(!alive) return;
+          }
+        } else if(distanciaASegmento(o.x,o.y, ultimo.x,ultimo.y, p.x,p.y) < o.r+6){
+          // Las frutas se cortan generosas a lo largo de todo el trazo.
           cortar(o, i, ang);
-          if(!alive) return;
         }
       }
     }
