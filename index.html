@@ -257,6 +257,9 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
   background:rgba(120,255,120,.08); font-weight:700; font-size:13px; line-height:1.5 }
 .adm-resultado b{ color:var(--lime) }
 .adm-resultado .dato{ display:block; margin-top:6px; word-break:break-all }
+.adm-switch{ display:flex; align-items:center; gap:10px; font-weight:700; font-size:14px;
+  cursor:pointer; margin:4px 0 2px; color:var(--text) }
+.adm-switch input{ width:20px; height:20px; accent-color:var(--lime); cursor:pointer }
 .adm-stat{ background:var(--panel2); border:2px solid var(--ink); border-radius:12px; padding:6px 12px; font-weight:800; font-size:13px }
 
 #confetti{ position:fixed; inset:0; pointer-events:none; z-index:90 }
@@ -303,6 +306,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
           <input class="adm-campo" id="admNvDias" type="number" placeholder="Días de duración (ej: 30)" autocomplete="off">
           <input class="adm-campo" id="admNvUser" placeholder="Usuario del padre (ej: sofi_mama)" autocomplete="off">
           <input class="adm-campo" id="admNvPass" placeholder="Contraseña para el padre" autocomplete="off">
+          <label class="adm-switch"><input type="checkbox" id="admNvChatDura" checked> El chat dura toda la fiesta</label>
           <button class="btn alt" id="admCrear" style="width:100%">Crear fiesta y cuenta</button>
           <div class="adm-resultado" id="admNvResultado" style="display:none"></div>
         </div>
@@ -331,6 +335,12 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
       <div class="adm-seccion">
         <h3>👥 Jugadores</h3>
         <div id="admJugadores"></div>
+      </div>
+
+      <div class="adm-seccion">
+        <h3>💬 Chat</h3>
+        <label class="adm-switch"><input type="checkbox" id="admChatDura"> El chat dura toda la fiesta</label>
+        <p class="adm-sub" style="margin:6px 0 0;text-align:left">Si lo destildás, el chat se borra cuando no queda nadie conectado (modo viejo).</p>
       </div>
 
       <div class="adm-seccion">
@@ -770,14 +780,32 @@ function iniciarLatido(){
   }, 12000);
 }
 
+/* CHAT: consultas ADAPTATIVAS.
+   Si el usuario estuvo activo hace poco (escribió o mandó algo),
+   consultamos rápido (cada 2s) para que se sienta al instante.
+   Si está quieto, bajamos a cada 4.5s para gastar mucho menos y
+   aguantar MUCHísima más gente en simultáneo. La experiencia casi
+   no cambia (un mensaje aparece en 4.5s como mucho). */
+let ultimaActividadChat = 0;
+function marcarActividadChat(){ ultimaActividadChat = Date.now(); }
+
 function iniciarChat(){
   if(chatTimer) return;
   cargarMensajes(true);
   refrescarConectados();
-  chatTimer = setInterval(function(){ cargarMensajes(false); refrescarConectados(); }, 2000);
+  programarProximaConsulta();
+}
+function programarProximaConsulta(){
+  const activoReciente = (Date.now() - ultimaActividadChat) < 15000;  // últimos 15s
+  const cada = activoReciente ? 2000 : 4500;
+  chatTimer = setTimeout(async function(){
+    await cargarMensajes(false);
+    await refrescarConectados();
+    programarProximaConsulta();   // se vuelve a agendar sola
+  }, cada);
 }
 function frenarChat(){
-  if(chatTimer){ clearInterval(chatTimer); chatTimer=null; }
+  if(chatTimer){ clearTimeout(chatTimer); chatTimer=null; }
 }
 
 async function cargarMensajes(primeraVez){
@@ -884,6 +912,7 @@ async function enviarMensaje(){
   const inp=document.getElementById('inpMensaje');
   const texto=inp.value.trim();
   if(!texto) return;
+  marcarActividadChat();          // el usuario está activo: consultamos rápido
   inp.value='';
   const ok=await Fiesta.enviarMensaje(texto);
   if(ok===true){ Sonido.play('tap'); cargarMensajes(false); }
@@ -899,6 +928,8 @@ document.getElementById('btnEnviar').onclick=enviarMensaje;
 document.getElementById('inpMensaje').addEventListener('keydown',function(e){
   if(e.key==='Enter') enviarMensaje();
 });
+// Mientras escribe, también cuenta como actividad (consultas rápidas).
+document.getElementById('inpMensaje').addEventListener('input', marcarActividadChat);
 
 /* Al cerrar la app avisamos que nos fuimos */
 addEventListener('pagehide', function(){ Fiesta.salirDelChat(); });
@@ -1036,14 +1067,24 @@ let fiestaAdminActual=null;   // {id, codigo, clave, nombre} que se administra a
 async function abrirHerramientas(codigo, clave){
   const d=await Fiesta.admin.entrar(codigo, clave);
   if(!d){ alert('No se pudo abrir esa fiesta'); return; }
+  // Buscamos el estado de "chat dura toda la fiesta" en la lista que
+  // trajo el login (así el interruptor arranca en la posición correcta).
+  const info = fiestasAdmin.find(function(f){ return f.codigo===codigo; }) || {};
   fiestaAdminActual={ id:d.fiesta_id, codigo:codigo, clave:clave, nombre:d.nombre };
   document.getElementById('admLoginMaestro').style.display='none';
   document.getElementById('admFiestas').style.display='none';
   document.getElementById('admHerramientas').style.display='block';
   document.getElementById('admSub').textContent=d.nombre||'Administrando la fiesta';
+  document.getElementById('admChatDura').checked = (info.chat_persistente !== false);
   pintarStats(d);
   cargarJugadoresAdmin();
 }
+
+/* Interruptor: prender/apagar que el chat dure toda la fiesta. */
+document.getElementById('admChatDura').onchange=async function(){
+  const ok=await Fiesta.admin.setChatPersistente(this.checked);
+  if(!ok){ this.checked=!this.checked; alert('No se pudo cambiar el chat'); }
+};
 
 /* Volver a la lista de fiestas sin cerrar sesion. */
 document.getElementById('admVolverFiestas').onclick=function(){
@@ -1169,6 +1210,7 @@ document.getElementById('admCrear').onclick=async function(){
   const dias=parseInt(document.getElementById('admNvDias').value,10)||30;
   const user=document.getElementById('admNvUser').value.trim().toLowerCase();
   const pass=document.getElementById('admNvPass').value.trim();
+  const chatDura=document.getElementById('admNvChatDura').checked;
   const box =document.getElementById('admNvResultado');
 
   if(!cod||!nom||!user||!pass){
@@ -1181,7 +1223,7 @@ document.getElementById('admCrear').onclick=async function(){
   const btn=this; btn.disabled=true; const txt=btn.textContent; btn.textContent='Creando…';
 
   // 1) Crear la fiesta
-  const f=await Fiesta.admin.crearFiestaSuper(cod, nom, fes, dias, sub, img);
+  const f=await Fiesta.admin.crearFiestaSuper(cod, nom, fes, dias, sub, img, chatDura);
   if(f.error){
     box.style.display='block'; box.style.borderColor='var(--magenta)';
     box.innerHTML='No se pudo crear la fiesta: '+escapar(f.error);
@@ -1211,6 +1253,7 @@ document.getElementById('admCrear').onclick=async function(){
   // Limpiar el formulario y refrescar la lista
   ['admNvCodigo','admNvNombre','admNvFestejado','admNvSub','admNvImg','admNvDias','admNvUser','admNvPass']
     .forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('admNvChatDura').checked=true;
   const r=await Fiesta.admin.entrarMaestro(Fiesta.admin.usuario, Fiesta.admin.claveMaestra);
   if(r){ fiestasAdmin=r.fiestas||[]; }
   // Redibujar la lista de fiestas y de admins sin perder el resultado mostrado

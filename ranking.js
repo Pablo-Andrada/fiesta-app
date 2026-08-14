@@ -410,7 +410,7 @@ const Fiesta = (() => {
       /* SUPER · Crea una fiesta nueva. El servidor le pone una
          clave interna aleatoria. Devuelve { id, codigo, clave_admin }
          o { error } si algo fallo (ej: codigo repetido). */
-      async crearFiestaSuper(codigo, nombre, festejado, dias, subtitulo, imagen) {
+      async crearFiestaSuper(codigo, nombre, festejado, dias, subtitulo, imagen, chatPersistente) {
         try {
           const r = await rpc('super_crear_fiesta', {
             p_usuario:   this.usuario, p_clave: this.claveMaestra,
@@ -418,6 +418,7 @@ const Fiesta = (() => {
             p_festejado: festejado,
             p_subtitulo: subtitulo || null,
             p_imagen:    imagen || null,
+            p_chat_persistente: (chatPersistente !== false),
             p_dias:      dias || 30,
           });
           const d = Array.isArray(r) ? r[0] : r;
@@ -492,6 +493,16 @@ const Fiesta = (() => {
       async borrarMensaje(id) {
         try { await rpc('admin_borrar_mensaje', { p_fiesta:this.fiestaId, p_clave:this.clave, p_id:id }); return true; }
         catch (e) { return false; }
+      },
+
+      /* Prende / apaga que el chat dure toda la fiesta. */
+      async setChatPersistente(valor) {
+        try {
+          await rpc('admin_set_chat_persistente', {
+            p_fiesta: this.fiestaId, p_clave: this.clave, p_valor: !!valor,
+          });
+          return true;
+        } catch (e) { return false; }
       },
 
       /* Lista de jugadores con sus datos para moderar */
