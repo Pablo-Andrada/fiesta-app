@@ -465,6 +465,10 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 <script src="sonido.js"></script>
 <script src="musica.js"></script>
 <script>
+/* Marca de version: abri la consola del navegador (F12) y fijate
+   este cartel para saber si estas viendo la version actualizada. */
+console.log('%cCIBER GAME','background:#ff2e9a;color:#fff;padding:2px 8px;border-radius:6px;font-weight:bold','chat v2 · sin duplicados');
+
 /* ================================================================
    CONFIGURACION DE LOS JUEGOS DISPONIBLES
    Para sacar un juego, borra su linea. Para agregar uno nuevo,
@@ -821,6 +825,14 @@ async function cargarMensajes(primeraVez){
 
 function pintarMensajes(){
   const cont=document.getElementById('mensajes');
+  // SEGURIDAD EXTRA: nunca mostrar dos veces el mismo mensaje.
+  // Aunque por alguna razon la lista tuviera un id repetido, aca
+  // se limpia antes de dibujar. Es la garantia final anti-duplicados.
+  const vistos=new Set();
+  mensajesEnPantalla = mensajesEnPantalla.filter(function(m){
+    if(vistos.has(m.id)) return false;
+    vistos.add(m.id); return true;
+  });
   if(!mensajesEnPantalla.length){
     cont.innerHTML=esModerador
       ? '<div class="chat-vacio">No hay mensajes en el chat 👀</div>'
