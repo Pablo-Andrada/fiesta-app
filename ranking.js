@@ -150,6 +150,16 @@ const Fiesta = (() => {
           jugadorId: estado.jugadorId,
           token:     estado.token,
         });
+        // Y ademas lo sumamos a la LISTA de cuentas de este celular,
+        // asi mas adelante puede volver a cualquiera (varios hermanos
+        // comparten el telefono, o alguien crea una cuenta por error).
+        this.recordarCuenta({
+          apodo, avatar,
+          codigo:    estado.fiesta?.codigo,
+          fiestaId:  estado.fiestaId,
+          jugadorId: estado.jugadorId,
+          token:     estado.token,
+        });
         return true;
       } catch (e) {
         // Si el apodo ya existe en esta fiesta, avisamos
@@ -201,11 +211,65 @@ const Fiesta = (() => {
         estado.apodo     = j.apodo;
         estado.avatar    = j.avatar;
         estado.token     = ses.token;
+        // Por si esta sesion venia de una version anterior (cuando
+        // todavia no existia la lista), la sumamos ahora.
+        this.recordarCuenta({
+          apodo: j.apodo, avatar: j.avatar,
+          codigo: ses.codigo, fiestaId: estado.fiestaId,
+          jugadorId: j.id, token: ses.token,
+        });
         return true;
       } catch (e) { return false; }
     },
 
-    /* Permite cambiar de jugador (borra la sesion de este navegador) */
+    /* ============================================================
+       CUENTAS DE ESTE CELULAR
+       ------------------------------------------------------------
+       Guardamos TODOS los jugadores que se crearon en este telefono
+       (no solo el ultimo). Asi, si varios hermanos comparten el
+       celular, o alguien crea una cuenta nueva sin querer, siempre
+       puede volver a la suya sin perder los puntos.
+       ============================================================ */
+
+    /* Suma (o actualiza) una cuenta en la lista de este celular. */
+    recordarCuenta(cuenta) {
+      if (!cuenta || !cuenta.token) return;
+      const lista = local.leer('cuentas', []);
+      // Si ya estaba (mismo token), la actualizamos en vez de duplicar
+      const i = lista.findIndex(c => c.token === cuenta.token);
+      if (i >= 0) lista[i] = cuenta; else lista.push(cuenta);
+      local.guardar('cuentas', lista.slice(-12));   // tope sano de 12
+    },
+
+    /* Devuelve las cuentas guardadas para UNA fiesta (por su codigo). */
+    cuentasGuardadas(codigo) {
+      const lista = local.leer('cuentas', []);
+      if (!codigo) return lista;
+      return lista.filter(c => c.codigo === codigo);
+    },
+
+    /* Entra con una cuenta ya guardada (la elige el chico de la lista).
+       Devuelve true si el servidor la reconocio. */
+    async usarCuenta(token) {
+      const lista = local.leer('cuentas', []);
+      const c = lista.find(x => x.token === token);
+      if (!c) return false;
+      // La dejamos como sesion activa y la retomamos normalmente
+      local.guardar('sesion', c);
+      return await this.retomarSesion();
+    },
+
+    /* Borra una cuenta de la lista de este celular (no la borra del
+       servidor: sus puntos siguen en el ranking). */
+    olvidarCuenta(token) {
+      const lista = local.leer('cuentas', []).filter(c => c.token !== token);
+      local.guardar('cuentas', lista);
+      const ses = local.leer('sesion', null);
+      if (ses && ses.token === token) this.olvidarSesion();
+    },
+
+    /* Deja de estar logueado como el jugador actual, PERO no borra la
+       lista de cuentas: por eso siempre se puede volver. */
     olvidarSesion() {
       try { localStorage.removeItem('fiesta_sesion'); } catch (e) {}
       estado.jugadorId = null; estado.token = null; estado.apodo = null;

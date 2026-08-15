@@ -263,6 +263,17 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
   cursor:pointer; margin:4px 0 2px; color:var(--text) }
 .adm-switch input{ width:20px; height:20px; accent-color:var(--lime); cursor:pointer }
 
+/* Botones de cuentas guardadas en este celular */
+.cuenta-btn{ display:flex; align-items:center; gap:10px; width:100%; margin-bottom:8px;
+  background:linear-gradient(150deg,var(--panel),var(--panel2)); border:3px solid var(--ink);
+  border-radius:16px; padding:10px 14px; cursor:pointer; font-family:'Baloo 2'; color:var(--text);
+  box-shadow:3px 3px 0 rgba(10,4,22,.5); transition:transform .12s }
+.cuenta-btn:hover{ transform:translateY(-2px); border-color:var(--cyan) }
+.cuenta-btn .ava{ font-size:26px; line-height:1 }
+.cuenta-btn .nom{ font-weight:800; font-size:16px; flex:1; text-align:left }
+.cuenta-btn .x{ font-size:13px; color:var(--muted); padding:2px 8px; border-radius:8px }
+.cuenta-btn .x:hover{ background:var(--magenta); color:#fff }
+
 /* Cartel de NUEVO RECORD (global, para todos los juegos) */
 #recordFx{ position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
   pointer-events:none; opacity:0; transition:opacity .25s }
@@ -387,11 +398,13 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div style="font-size:52px">🎉</div>
     <h1 id="entTitulo">¡BIENVENIDO<br>A LA FIESTA!</h1>
 
-    <!-- Banner para RETOMAR la sesion (aparece solo si ya jugaste
-         antes en este celular y saliste sin cambiar de jugador). -->
+    <!-- Lista de cuentas guardadas en ESTE celular. Aparece sola si
+         ya hay alguien que jugó acá, para que pueda volver a su
+         cuenta (con sus puntos) sin crear una nueva. -->
     <div id="retomar" style="display:none;margin:0 0 14px">
-      <button class="btn alt" id="btnRetomar" style="width:100%">Seguir en la fiesta 👉</button>
-      <p class="tip" style="margin-top:6px">Vas a volver como <b id="retomarNom"></b></p>
+      <p class="tip" style="margin:0 0 8px">¿Ya jugaste antes? Tocá tu nombre 👇</p>
+      <div id="listaCuentas"></div>
+      <button class="btn" id="btnOtroJugador" style="width:100%;margin-top:8px">➕ Soy otro jugador</button>
     </div>
 
     <!-- Paso 1 -->
@@ -535,6 +548,10 @@ let avatarElegido=AVATARES[0];
   if(await Fiesta.retomarSesion()){
     avatarElegido = Fiesta.estado.avatar;
     mostrarApp();
+  } else {
+    // No hay sesion activa, pero puede haber otras cuentas guardadas
+    // en este celular (hermanos, o una cuenta creada sin querer).
+    mostrarBotonRetomar();
   }
 })();
 
@@ -582,8 +599,14 @@ async function validarCodigo(){
   }
   aviso.textContent='';
   if(fiesta.festejado) document.getElementById('entTitulo').innerHTML='¡CUMPLE DE<br>'+fiesta.festejado.toUpperCase()+'!';
+  mostrarPaso2();
+}
+
+/* Pasa a la pantalla de elegir apodo y avatar. */
+function mostrarPaso2(){
   document.getElementById('paso1').classList.remove('on');
   document.getElementById('paso2').classList.add('on');
+  document.getElementById('retomar').style.display='none';
   document.getElementById('inpApodo').focus();
 }
 
@@ -644,19 +667,17 @@ function pintarHome(){
   }
 }
 
-/* Boton para cambiar de jugador en este navegador (borra la sesion) */
+/* Boton 👤: ahora NO borra nada. Lleva a la pantalla de inicio y
+   muestra la lista de cuentas de este celular, para elegir con
+   cuál seguir o crear una nueva. Asi nadie pierde sus puntos. */
 document.getElementById('btnCambiar').onclick=function(){
-  if(confirm('¿Querés entrar con otro jugador?\n\nVas a perder el progreso guardado en este celular.')){
-    Fiesta.olvidarSesion();
-    location.reload();
-  }
+  salirDeLaApp();
 };
 
 /* SALIR sin perder el progreso.
    Deja la sesion guardada, avisa que nos fuimos del chat (para
    que la sala se pueda limpiar) y vuelve a la pantalla de inicio.
-   Al volver, el boton "Seguir en la fiesta" te devuelve donde
-   estabas, con el mismo apodo y puntajes. */
+   Al volver, la lista de cuentas te devuelve donde estabas. */
 function salirDeLaApp(){
   frenarChat();
   if(latidoGlobal){ clearInterval(latidoGlobal); latidoGlobal=null; }
@@ -668,32 +689,77 @@ function salirDeLaApp(){
 }
 document.getElementById('btnSalir').onclick=salirDeLaApp;
 
-/* Muestra el banner "Seguir en la fiesta" si hay una sesion
-   guardada en este celular. */
+/* Dibuja la lista de cuentas guardadas en este celular. */
 function mostrarBotonRetomar(){
-  const ses=Fiesta.sesionGuardada();
   const box=document.getElementById('retomar');
-  if(ses && ses.apodo){
-    document.getElementById('retomarNom').textContent=(ses.avatar||'')+' '+ses.apodo;
-    box.style.display='block';
-  } else {
-    box.style.display='none';
-  }
+  const cont=document.getElementById('listaCuentas');
+  // Cuentas de la fiesta que el chico ya jugó en este celular
+  const ses=Fiesta.sesionGuardada();
+  const codigo = (Fiesta.estado.fiesta && Fiesta.estado.fiesta.codigo) || (ses && ses.codigo) || null;
+  const cuentas=Fiesta.cuentasGuardadas(codigo);
+  if(!cuentas.length){ box.style.display='none'; return; }
+
+  const puntajes=Fiesta.puntajesLocales();
+  cont.innerHTML=cuentas.map(function(c){
+    return '<button class="cuenta-btn" data-token="'+escapar(c.token)+'">'+
+      '<span class="ava">'+escapar(c.avatar||'🙂')+'</span>'+
+      '<span class="nom">'+escapar(c.apodo)+'</span>'+
+      '<span class="x" data-borrar="'+escapar(c.token)+'" title="Sacar de este celular">✕</span>'+
+      '</button>';
+  }).join('');
+  box.style.display='block';
+  // Mostramos SOLO la lista: el formulario de crear jugador aparece
+  // recien si toca "Soy otro jugador" (asi no se ve todo junto).
+  document.getElementById('paso2').classList.remove('on');
+  document.getElementById('paso1').classList.remove('on');
+
+  // Tocar una cuenta = entrar con ella
+  cont.querySelectorAll('.cuenta-btn').forEach(function(b){
+    b.onclick=async function(e){
+      if(e.target.dataset.borrar) return;         // el ✕ se maneja aparte
+      b.disabled=true; b.style.opacity='.6';
+      if(await Fiesta.usarCuenta(b.dataset.token)){
+        avatarElegido = Fiesta.estado.avatar;
+        mostrarApp();
+      } else {
+        document.getElementById('aviso1').textContent='No se pudo entrar con esa cuenta. Probá otra o creá una nueva.';
+        b.disabled=false; b.style.opacity='1';
+      }
+    };
+  });
+  // El ✕ saca la cuenta de este celular (sus puntos siguen en el ranking)
+  cont.querySelectorAll('[data-borrar]').forEach(function(x){
+    x.onclick=function(e){
+      e.stopPropagation();
+      if(!confirm('¿Sacar esta cuenta de este celular?\n\nSus puntos siguen en el ranking, pero no vas a poder volver a entrar desde acá.')) return;
+      Fiesta.olvidarCuenta(x.dataset.borrar);
+      mostrarBotonRetomar();
+    };
+  });
 }
 
-/* Al tocar "Seguir en la fiesta": retoma la sesion y entra. */
-document.getElementById('btnRetomar').onclick=async function(){
-  this.disabled=true; this.textContent='Entrando…';
-  if(await Fiesta.retomarSesion()){
-    avatarElegido = Fiesta.estado.avatar;
-    mostrarApp();
-  } else {
-    // La sesion ya no sirve (ej: la fiesta vencio o se cerro)
-    document.getElementById('aviso1').textContent='No se pudo retomar. La fiesta puede haber terminado.';
-    Fiesta.olvidarSesion();
-    document.getElementById('retomar').style.display='none';
+/* "Soy otro jugador": va a la pantalla de crear apodo/avatar,
+   sin borrar las cuentas que ya estan guardadas. */
+document.getElementById('btnOtroJugador').onclick=async function(){
+  Fiesta.olvidarSesion();
+  document.getElementById('retomar').style.display='none';
+  // Si ya sabemos de que fiesta se trata, vamos directo a elegir
+  // apodo; si no, pedimos el codigo primero.
+  let cod = Fiesta.estado.fiesta && Fiesta.estado.fiesta.codigo;
+  if(!cod){
+    const guardadas=Fiesta.cuentasGuardadas(null);
+    if(guardadas.length) cod=guardadas[guardadas.length-1].codigo;
+    if(cod) await Fiesta.buscarFiesta(cod);
   }
-  this.disabled=false; this.textContent='Seguir en la fiesta 👉';
+  if(cod && Fiesta.estado.fiesta){
+    if(Fiesta.estado.fiesta.festejado){
+      document.getElementById('entTitulo').innerHTML='¡CUMPLE DE<br>'+Fiesta.estado.fiesta.festejado.toUpperCase()+'!';
+    }
+    mostrarPaso2();
+  } else {
+    document.getElementById('paso1').classList.add('on');
+    document.getElementById('inpCodigo').focus();
+  }
 };
 
 /* Boton para prender / apagar el sonido */
