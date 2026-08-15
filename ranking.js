@@ -216,13 +216,21 @@ const Fiesta = (() => {
     async guardarPuntaje(juego, puntos, nivel) {
       const locales = local.leer('puntajes', {});
       const previo  = locales[juego] || { puntos: 0, nivel: 0 };
+      // ¿Superó su propio récord? (solo si ya tenía uno, para no
+      // festejar en la primera partida de cada juego)
+      const esRecord = previo.puntos > 0 && puntos > previo.puntos;
       locales[juego] = {
         puntos: Math.max(previo.puntos, puntos),
         nivel:  Math.max(previo.nivel,  nivel),
       };
       local.guardar('puntajes', locales);
 
-      if (!estado.online || !estado.token) return;
+      // Avisamos a la interfaz para que festeje el récord (si hay).
+      if (esRecord && typeof window !== 'undefined' && window.alSuperarRecord) {
+        try { window.alSuperarRecord(juego, puntos); } catch (e) {}
+      }
+
+      if (!estado.online || !estado.token) return esRecord;
       try {
         // Ya no escribimos directo en la tabla: llamamos a una
         // funcion del servidor que verifica identidad y topes.
@@ -233,6 +241,7 @@ const Fiesta = (() => {
           p_nivel:  locales[juego].nivel,
         });
       } catch (e) { console.warn('No se pudo subir el puntaje:', e.message); }
+      return esRecord;
     },
 
     /* Trae el ranking general (suma de todos los juegos). */
