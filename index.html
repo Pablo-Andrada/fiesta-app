@@ -2435,10 +2435,15 @@ function Frutas(el){
       for(let i=objetos.length-1;i>=0;i--){
         const o=objetos[i];
         o.x+=o.vx; o.y+=o.vy; o.vy+=cfg.gravedad; o.giro+=o.vGiro;
-        // Si se cae por abajo: si era fruta, se pierde una vida
+        // Si se cae por abajo, se saca de la pantalla.
+        // IMPORTANTE: dejar caer una fruta ya NO quita vida. Antes sí,
+        // y por eso al levantar el dedo para ESQUIVAR una bomba, las
+        // frutas que caían al mismo tiempo te sacaban vida (parecía que
+        // la bomba te mataba sola). Ahora solo perdés vida al cortar una
+        // bomba; una fruta que se escapa solo corta el combo.
         if(o.y>H+50){
           objetos.splice(i,1);
-          if(!o.bomba){ perderVida('escape'); combo=0; if(!alive) return; }
+          if(!o.bomba) combo=0;
         }
       }
 
