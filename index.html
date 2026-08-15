@@ -157,13 +157,12 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
   animation:memAvisoPop .3s ease-out both; box-shadow:0 0 16px rgba(255,225,77,.5) }
 @keyframes memAvisoPop{ from{ opacity:0; transform:translateX(-50%) translateY(8px) } to{ opacity:1; transform:translateX(-50%) translateY(0) } }
 
-#snakeCanvas,#autoCanvas,#basketCanvas,#naveCanvas,#frutasCanvas,#toposCanvas,#ritmoCanvas,#torreCanvas,#simonCanvas,#penalesCanvas{ display:block; margin:0 auto; background:var(--ink); border:3px solid var(--violet); border-radius:14px; touch-action:none }
+#snakeCanvas,#autoCanvas,#basketCanvas,#naveCanvas,#frutasCanvas,#toposCanvas,#ritmoCanvas,#torreCanvas,#simonCanvas{ display:block; margin:0 auto; background:var(--ink); border:3px solid var(--violet); border-radius:14px; touch-action:none }
 #snakeCanvas{ width:min(300px,86vw); height:min(300px,86vw) }
 #autoCanvas,#basketCanvas,#naveCanvas,#frutasCanvas{ width:min(300px,84vw); height:min(380px,106vw) }
 #toposCanvas{ width:min(300px,84vw); height:min(340px,95vw) }
 #ritmoCanvas,#torreCanvas{ width:min(300px,84vw); height:min(400px,112vw) }
 #simonCanvas{ width:min(300px,84vw); height:min(300px,84vw) }
-#penalesCanvas{ width:min(300px,84vw); height:min(380px,106vw) }
 .dpad{ display:grid; grid-template-columns:repeat(3,56px); grid-template-rows:repeat(3,56px); gap:6px; justify-content:center; margin:14px auto 0 } .dpad .btn{ padding:0; font-size:22px; border-radius:12px; display:flex; align-items:center; justify-content:center } .dpad .sp{ visibility:hidden }
 .lr{ display:flex; gap:12px; justify-content:center; margin-top:12px } .lr .btn{ font-size:24px; min-width:74px }
 
@@ -513,7 +512,6 @@ const JUEGOS=[
   { id:'ritmo',    nombre:'Ritmo',    icono:'🎹', fn:()=>Ritmo },
   { id:'torre',    nombre:'Torre',    icono:'🥞', fn:()=>Torre },
   { id:'simon',    nombre:'Simón',    icono:'🧠', fn:()=>Simon },
-  { id:'penales',  nombre:'Penales',  icono:'⚽', fn:()=>Penales },
 ];
 
 const AVATARES=['🦁','🐯','🐸','🐼','🦊','🐵','🦄','🐲','🤖','👽','🦖','🐙','🦈','🐝','🦉','🐨','🍕','⚡'];
@@ -1987,7 +1985,7 @@ function Nave(el){
       booms;        // explosiones en pantalla
   let alive,done,raf,last,spawnT,shootT,cometaT,powerT,lastShot,moveL,moveR,firing,invul;
   let escudoT=0;                 // ms de escudo temporal activo (power-up)
-  let jefe=null, jefeDerrotado=false;   // JEFE FINAL: solo aparece en el nivel 5
+  let jefe=null, jefeDerrotado=false;   // JEFE: aparece al final de CADA nivel
 
   /* ---------- Arranque de cada nivel ---------- */
   function startLevel(l){
@@ -2154,25 +2152,30 @@ function Nave(el){
           enemies.splice(i,1); explotar(en.x,en.y,false);
           Sonido.play('explosion');
           kills++; el.querySelector('#nMeta').textContent=kills+'/'+cfg.meta;
-          if(kills>=cfg.meta && level<5){ levelUp(); return; }
-          if(kills>=cfg.meta && level===5 && !jefe && !jefeDerrotado){
-            jefe={ x:W/2, y:-70, vida:26, vidaMax:26, dir:1, fase:0 };
-            avisoNave='👾 ¡JEFE FINAL!'; avisoNaveT=1800;
+          // 👾 El JEFE aparece al llegar a la meta de CUALQUIER nivel
+          // (antes solo aparecia en el 5). Es mas fuerte y dispara mas
+          // rapido cuanto mas alto el nivel, para que siga siendo un
+          // desafio parejo incluso con la nave basica del nivel 1.
+          if(kills>=cfg.meta && !jefe && !jefeDerrotado){
+            const vidaJefe = 10 + level*4;                 // 14, 18, 22, 26, 30
+            jefe={ x:W/2, y:-70, vida:vidaJefe, vidaMax:vidaJefe, dir:1, fase:0,
+                   cadenciaDisparo: Math.max(650, 1300-level*130) };
+            avisoNave='👾 ¡JEFE DEL NIVEL '+level+'!'; avisoNaveT=1800;
             Sonido.play('nivel');
           }
         }
       }
 
-      /* JEFE FINAL: aparece al llegar a la meta del nivel 5.
-         Vuela de lado a lado disparando en abanico. Hay que
-         pegarle 26 veces (aguanta bastante mas que un bicho comun). */
+      /* JEFE DE NIVEL: aparece al llegar a la meta de cada nivel.
+         Vuela de lado a lado disparando en abanico. Hay que pegarle
+         varias veces (mas cuanto mas alto el nivel) para pasar. */
       if(jefe){
         jefe.y = Math.min(70, jefe.y+1.4);           // baja hasta su posicion
         if(jefe.y>=70){
-          jefe.x += jefe.dir*1.6;
+          jefe.x += jefe.dir*(1.6+level*0.15);
           if(jefe.x<50||jefe.x>W-50) jefe.dir*=-1;
           jefe.fase+=dt;
-          if(jefe.fase>1100){                          // dispara en abanico cada 1.1s
+          if(jefe.fase>jefe.cadenciaDisparo){          // dispara en abanico
             jefe.fase=0;
             for(let k=-2;k<=2;k++) eBullets.push({x:jefe.x, y:jefe.y+30, vx:k*1.3});
           }
@@ -2202,17 +2205,17 @@ function Nave(el){
     draw(); raf=requestAnimationFrame(frame);
   }
 
-  /* ---------- Pasar de nivel ---------- */
+  /* ---------- Pasar de nivel (se llama recien tras vencer al jefe) ---------- */
   function levelUp(){
     awardLevel('nave', level); Fiesta.guardarPuntaje('nave', kills + (level-1)*80, level);
     done=true; burst();
     const bn=el.querySelector('#nBanner');
     if(level<5){
       Sonido.play('nivel');
-      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
+      bn.innerHTML=`👾 ¡Jefe vencido! Nivel ${level} superado ⭐`;
       const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
       b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else { Sonido.play('victoria'); bn.innerHTML=`🏆 ¡Ganaste la Nave! 5 ⭐`; }
+    } else { Sonido.play('victoria'); bn.innerHTML=`🏆 ¡Venciste al último jefe! Nave completa 5 ⭐`; }
   }
 
   /* ---------- Dibujo de la nave segun la equipacion ---------- */
@@ -3923,475 +3926,6 @@ function Simon(el){
 
   startLevel(1);
   cleanup=()=>{ if(raf) cancelAnimationFrame(raf); limpiarTimers(); };
-}
-
-/* ============================================================
-   PENALES · patear al arco (con arquero que ataja)
-   ------------------------------------------------------------
-   COMO SE JUEGA
-   1) Aparece una MIRA que se mueve sola de lado a lado.
-   2) Tocás una vez para fijar la ALTURA/DIRECCION horizontal.
-   3) Aparece una barra de POTENCIA que sube y baja: tocás de
-      nuevo para definir con cuanta fuerza pateas.
-   4) El jugador patea y el arquero se tira para un lado.
-
-   EL ARQUERO
-   Va mejorando por nivel: en el 1 se tira casi al azar, y en
-   el 5 "adivina" bastante seguido hacia donde va la pelota.
-   Igual siempre queda chance: si la pones en un angulo alto
-   (la telarana), es mucho mas dificil que llegue.
-
-   PUNTOS: 1 gol comun, 2 si es al angulo (arriba y a los lados).
-   ============================================================ */
-
-/* El arquero mejora en tres cosas por nivel:
-     precision = probabilidad de adivinar el lado
-     alcance   = cuanto se estira (llega mas alto)
-     reflejo   = que tan cerca tiene que pasar para atajarla
-   Ademas "lee" la potencia: un remate flojo es mas facil. */
-const PENALES_LEVELS=[
-  { meta:3, precision:0.34, alcance:62,  velMira:2.1, reflejo:46 },
-  { meta:4, precision:0.48, alcance:72,  velMira:2.6, reflejo:52 },
-  { meta:5, precision:0.60, alcance:82,  velMira:3.1, reflejo:58 },
-  { meta:6, precision:0.72, alcance:92,  velMira:3.7, reflejo:64 },
-  { meta:7, precision:0.84, alcance:102, velMira:4.4, reflejo:70 },
-];
-
-function Penales(el){
-  el.innerHTML=`<h2>⚽ Penales</h2>
-    <p class="lead">Tocá para elegir la puntería, y otra vez para la potencia.</p>
-    <div class="hud"><span class="lv" id="pLv"></span><span id="pTiros">Tiros: 5</span><span>⚽ <span class="stat" id="pMeta">0</span></span></div>
-    <canvas id="penalesCanvas" width="300" height="380"></canvas>
-    <div class="lr"><button class="btn alt" id="pShoot" style="flex:1">⚽ PATEAR</button></div>
-    <div class="banner" id="pBanner"></div>`;
-
-  const cv=el.querySelector('#penalesCanvas'), ctx=cv.getContext('2d');
-  const W=cv.width, H=cv.height;
-
-  /* Medidas del arco */
-  const ARCO={ x:42, y:78, w:216, h:104 };
-  const PELOTA_Y=H-58;
-
-  let level, goles, tiros, alive, done, raf, last;
-  let fase;            // 'mira' | 'potencia' | 'pateando' | 'resultado'
-  let mira, potencia, potenciaDir, pelota, arquero, aviso;
-
-  /* ---------- Arranque ---------- */
-  function startLevel(l){
-    level=l;
-    goles=0; tiros=5+l; alive=true; done=false;
-    resetTiro();
-    el.querySelector('#pLv').textContent='Nivel '+l+'/5';
-    el.querySelector('#pMeta').textContent='0/'+PENALES_LEVELS[l-1].meta;
-    el.querySelector('#pTiros').textContent='Tiros: '+tiros;
-    el.querySelector('#pBanner').textContent='';
-    last=performance.now();
-    if(raf) cancelAnimationFrame(raf);
-    raf=requestAnimationFrame(frame);
-  }
-
-  /* ---------- Preparar un tiro nuevo ---------- */
-  function resetTiro(){
-    fase='mira';
-    mira={ x:W/2, dir:1, y:ARCO.y+30 };
-    potencia=0; potenciaDir=1;
-    pelota={ x:W/2, y:PELOTA_Y, vx:0, vy:0, escala:1, volando:false };
-    arquero={ x:W/2, y:ARCO.y+ARCO.h-16, tirado:0, dir:0, saltando:false };
-    aviso=null;
-  }
-
-  /* ---------- El jugador toca ---------- */
-  function accion(){
-    if(!alive || done) return;
-    if(fase==='mira'){
-      fase='potencia';
-      Sonido.play('tap');
-    } else if(fase==='potencia'){
-      patear();
-    }
-  }
-
-  /* ---------- Patear ---------- */
-  function patear(){
-    const cfg=PENALES_LEVELS[level-1];
-    fase='pateando';
-    Sonido.play('disparo');
-
-    // La altura del remate depende de la potencia:
-    // poca potencia = rasante, mucha = arriba (y puede irse afuera)
-    const destinoX = mira.x;
-    const alturaFactor = potencia/100;
-    const destinoY = ARCO.y + ARCO.h - alturaFactor*(ARCO.h+22);
-
-    pelota.volando=true;
-    pelota.destinoX=destinoX;
-    pelota.destinoY=destinoY;
-    pelota.t=0;
-    pelota.origenX=pelota.x;
-    pelota.origenY=pelota.y;
-    // Efecto de curva (solo visual): la pelota se "abre" a mitad de
-    // camino y vuelve a su destino real al llegar. No cambia el
-    // resultado del tiro, solo lo hace ver mas vistoso.
-    pelota.curva = (destinoX - W/2)/8 * (0.6+Math.random()*0.8) * (Math.random()<0.5?1:-1);
-
-    // El arquero decide hacia donde tirarse.
-    // "precision" = probabilidad de adivinar el lado correcto.
-    /* ---- DECISION DEL ARQUERO ----
-       Elige el lado segun la probabilidad del nivel. Si el
-       remate es flojo, le resulta mas facil leerlo. */
-    const ladoPelota = destinoX < W*0.42 ? -1 : (destinoX > W*0.58 ? 1 : 0);
-    const plusFlojo = potencia < 45 ? 0.15 : 0;
-    let ladoArquero;
-    if(Math.random() < Math.min(0.95, cfg.precision + plusFlojo)){
-      ladoArquero = ladoPelota;
-    } else {
-      const opciones=[-1,0,1].filter(function(o){ return o!==ladoPelota; });
-      ladoArquero = opciones[(Math.random()*opciones.length)|0];
-    }
-    arquero.dir=ladoArquero;
-    arquero.saltando=true;
-    // Tambien estima la altura: a mas nivel, mejor la calcula
-    arquero.alturaObjetivo = destinoY + (1-cfg.precision)*(Math.random()-0.5)*70;
-    arquero.alcanceY = ARCO.y + ARCO.h - cfg.alcance;
-  }
-
-  /* ---------- Resolver si fue gol ---------- */
-  function resolver(){
-    const cfg=PENALES_LEVELS[level-1];
-    const px=pelota.x, py=pelota.y;
-
-    // Afuera del arco
-    const dentro = px>ARCO.x+8 && px<ARCO.x+ARCO.w-8 && py>ARCO.y && py<ARCO.y+ARCO.h;
-    if(!dentro){
-      aviso={ texto:'¡AFUERA! 😖', color:'#ff8c1a', t:1400 };
-      Sonido.play('error');
-      terminarTiro(false);
-      return;
-    }
-
-    // Donde quedaron las manos del arquero
-    const arqX = W/2 + arquero.dir*(ARCO.w*0.34)*arquero.tirado;
-    const arqY = Math.max(arquero.alcanceY, arquero.alturaObjetivo || (ARCO.y+ARCO.h-40));
-
-    // La ataja si la pelota paso dentro de su alcance
-    const distancia = Math.hypot(px-arqX, py-arqY);
-    const atajado = distancia < cfg.reflejo && py > arquero.alcanceY-10;
-
-    if(atajado){
-      aviso={ texto:'¡ATAJÓ! 🧤', color:'#ff2e9a', t:1400 };
-      Sonido.play('choque'); Sonido.vibrar(90);
-      terminarTiro(false);
-    } else {
-      // Gol: vale doble si fue al angulo (arriba y a los costados)
-      const alAngulo = py < ARCO.y+38 && (px < ARCO.x+70 || px > ARCO.x+ARCO.w-70);
-      const suma = alAngulo ? 2 : 1;
-      goles += suma;
-      aviso={ texto: alAngulo ? '¡GOLAZO AL ÁNGULO! ⚡' : '¡GOL! ⚽', color:'#8cff5a', t:1400 };
-      Sonido.play(alAngulo ? 'powerup' : 'acierto');
-      el.querySelector('#pMeta').textContent=Math.min(goles,cfg.meta)+'/'+cfg.meta;
-      terminarTiro(true);
-    }
-  }
-
-  function terminarTiro(fueGol){
-    fase='resultado';
-    tiros--;
-    el.querySelector('#pTiros').textContent='Tiros: '+tiros;
-    const cfg=PENALES_LEVELS[level-1];
-
-    setTimeout(()=>{
-      if(done) return;
-      if(goles>=cfg.meta){ levelUp(); return; }
-      if(tiros<=0){
-        alive=false; Sonido.play('gameover');
-        const bn=el.querySelector('#pBanner');
-        bn.innerHTML=`<span style="color:var(--magenta)">Te quedaste sin tiros ⚽</span>`;
-        const b=document.createElement('button');
-        b.className='btn alt mt'; b.textContent='Reintentar nivel';
-        b.onclick=()=>startLevel(level);
-        bn.appendChild(document.createElement('br')); bn.appendChild(b);
-        return;
-      }
-      resetTiro();
-    }, 1500);
-  }
-
-  /* ---------- Pasar de nivel ---------- */
-  function levelUp(){
-    if(done) return;
-    done=true;
-    awardLevel('penales', level);
-    Fiesta.guardarPuntaje('penales', goles*30 + tiros*10 + (level-1)*100, level);
-    burst();
-    const bn=el.querySelector('#pBanner');
-    if(level<5){
-      Sonido.play('nivel');
-      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
-      const b=document.createElement('button');
-      b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
-      b.onclick=()=>startLevel(level+1);
-      bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else {
-      Sonido.play('victoria');
-      bn.innerHTML=`🏆 ¡Ganaste los Penales! 5 ⭐`;
-    }
-  }
-
-  /* ---------- Bucle ---------- */
-  function frame(now){
-    const dt=Math.min(50, now-last); last=now;
-    const paso=dt/16.7;
-    const cfg=PENALES_LEVELS[level-1];
-
-    if(alive && !done){
-      if(fase==='mira'){
-        // La mira va y viene por el ancho del arco
-        mira.x += cfg.velMira*mira.dir*paso;
-        if(mira.x>ARCO.x+ARCO.w-14){ mira.x=ARCO.x+ARCO.w-14; mira.dir=-1; }
-        if(mira.x<ARCO.x+14){ mira.x=ARCO.x+14; mira.dir=1; }
-      } else if(fase==='potencia'){
-        // La barra sube y baja
-        potencia += 2.6*potenciaDir*paso;
-        if(potencia>100){ potencia=100; potenciaDir=-1; }
-        if(potencia<0){ potencia=0; potenciaDir=1; }
-      } else if(fase==='pateando'){
-        // La pelota viaja hacia el arco (y se achica: se aleja)
-        pelota.t += 0.032*paso;
-        const t=Math.min(1, pelota.t);
-        // La curva se aplica de forma visual: maxima a mitad de camino
-        // (sin(t*PI)) y vuelve a 0 justo al llegar, asi el resultado
-        // del tiro (gol/atajada) no cambia, solo el recorrido visual.
-        const curvaVisual = (pelota.curva||0) * Math.sin(t*Math.PI);
-        pelota.x = pelota.origenX + (pelota.destinoX-pelota.origenX)*t + curvaVisual;
-        pelota.y = pelota.origenY + (pelota.destinoY-pelota.origenY)*t;
-        pelota.escala = 1 - t*0.45;
-        // El arquero se estira
-        if(arquero.tirado<1) arquero.tirado=Math.min(1, arquero.tirado+0.07*paso);
-        if(t>=1){ resolver(); }
-      }
-      if(aviso){ aviso.t-=dt; if(aviso.t<=0) aviso=null; }
-    }
-
-    draw();
-    raf=requestAnimationFrame(frame);
-  }
-
-  /* ---------- Dibujo del arquero ---------- */
-  function dibujarArquero(){
-    const cfg=PENALES_LEVELS[level-1];
-    const estirado=arquero.tirado;
-    const cx = W/2 + arquero.dir*(ARCO.w*0.34)*estirado;
-    const cy = arquero.y - (arquero.dir===0 ? cfg.alcance*0.55*estirado : 0);
-
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(arquero.dir*estirado*1.0);
-    ctx.scale(1.35, 1.35);                  // ARQUERO MAS GRANDE
-
-    // Piernas y botines
-    ctx.strokeStyle='#1b2c4d'; ctx.lineWidth=7; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-3,0); ctx.lineTo(-9,17); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(3,0);  ctx.lineTo(9,17);  ctx.stroke();
-    ctx.fillStyle='#0a0416';
-    rr(ctx,-14,15,10,5,2); ctx.fill(); rr(ctx,5,15,10,5,2); ctx.fill();
-
-    // Camiseta de arquero (verde fluor) con el numero 23
-    ctx.fillStyle='#8cff5a';
-    rr(ctx,-12,-26,24,28,7); ctx.fill();
-    ctx.strokeStyle='#0a0416'; ctx.lineWidth=2; ctx.stroke();
-    ctx.fillStyle='#0a0416'; ctx.font='700 11px "Baloo 2",serif';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('23', 0, -13);
-
-    // Brazos extendidos (llegan mas lejos que antes)
-    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=6;
-    const brazoAlto = -24 - cfg.alcance*0.42*estirado;
-    ctx.beginPath(); ctx.moveTo(-9,-22); ctx.lineTo(-23, brazoAlto); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(9,-22);  ctx.lineTo(23,  brazoAlto); ctx.stroke();
-    // Guantes grandes
-    ctx.fillStyle='#26e8ff'; ctx.strokeStyle='#0a0416'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.arc(-24, brazoAlto-2, 8, 0, 7); ctx.fill(); ctx.stroke();
-    ctx.beginPath(); ctx.arc(24,  brazoAlto-2, 8, 0, 7); ctx.fill(); ctx.stroke();
-
-    // Cabeza
-    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-35,9,0,7); ctx.fill();
-    ctx.strokeStyle='#0a0416'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.fillStyle='#2b1d10'; ctx.beginPath(); ctx.arc(0,-37,9,Math.PI,0); ctx.fill();
-    ctx.fillStyle='#0a0416';
-    ctx.beginPath(); ctx.arc(-3.5,-34,1.4,0,7); ctx.fill();
-    ctx.beginPath(); ctx.arc(3.5,-34,1.4,0,7); ctx.fill();
-
-    ctx.restore();
-  }
-
-  /* ---------- Dibujo del pateador ---------- */
-  function dibujarPateador(){
-    const x=W/2-46, y=H-24;
-    const pateando = fase==='pateando' && pelota.t<0.3;
-    ctx.save(); ctx.translate(x,y); ctx.scale(1.2,1.2);
-
-    // Piernas
-    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=6; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-1,-14); ctx.lineTo(-5,0); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(1,-14);
-    if(pateando) ctx.lineTo(17,-11); else ctx.lineTo(7,0);
-    ctx.stroke();
-    // Short negro
-    ctx.fillStyle='#12132a'; rr(ctx,-8,-20,16,10,3); ctx.fill();
-    // Botines
-    ctx.fillStyle='#ffe14d';
-    if(pateando){ rr(ctx,15,-14,10,5,2); ctx.fill(); } else { rr(ctx,5,-3,10,5,2); ctx.fill(); }
-    rr(ctx,-10,-3,10,5,2); ctx.fill();
-
-    // Camiseta CELESTE Y BLANCA a rayas, con el 10
-    ctx.fillStyle='#ffffff';
-    rr(ctx,-9,-36,18,18,5); ctx.fill();
-    ctx.save();
-    ctx.beginPath(); rr(ctx,-9,-36,18,18,5); ctx.clip();
-    ctx.fillStyle='#6ec7f0';
-    [-9,-3,3].forEach(function(fx){ ctx.fillRect(fx,-36,3,18); });
-    ctx.restore();
-    ctx.strokeStyle='#0a0416'; ctx.lineWidth=2; rr(ctx,-9,-36,18,18,5); ctx.stroke();
-    ctx.fillStyle='#0a0416'; ctx.font='700 9px "Baloo 2",serif';
-    ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('10', 0, -26);
-
-    // Brazos
-    ctx.strokeStyle='#f4c28a'; ctx.lineWidth=4.5;
-    ctx.beginPath(); ctx.moveTo(-7,-32); ctx.lineTo(-15,-24); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(7,-32);  ctx.lineTo(14,-26);  ctx.stroke();
-
-    // Cabeza
-    ctx.fillStyle='#f4c28a'; ctx.beginPath(); ctx.arc(0,-44,8,0,7); ctx.fill();
-    ctx.strokeStyle='#0a0416'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.fillStyle='#2b1d10'; ctx.beginPath(); ctx.arc(0,-46,8,Math.PI,0); ctx.fill();
-    ctx.fillStyle='#0a0416';
-    ctx.beginPath(); ctx.arc(-3,-43,1.3,0,7); ctx.fill();
-    ctx.beginPath(); ctx.arc(3,-43,1.3,0,7); ctx.fill();
-
-    ctx.restore();
-  }
-
-  /* ---------- Dibujo general ---------- */
-  function draw(){
-    // Cielo nocturno de estadio
-    const g=ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,'#0d1b2e'); g.addColorStop(0.45,'#14304a'); g.addColorStop(1,'#1c5c2e');
-    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-
-    // Luces del estadio
-    ctx.fillStyle='rgba(255,255,220,.06)';
-    ctx.beginPath(); ctx.moveTo(20,0); ctx.lineTo(90,0); ctx.lineTo(150,H); ctx.lineTo(-30,H); ctx.closePath(); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(W-20,0); ctx.lineTo(W-90,0); ctx.lineTo(W-150,H); ctx.lineTo(W+30,H); ctx.closePath(); ctx.fill();
-
-    // Tribuna de fondo
-    ctx.fillStyle='#0f1830'; ctx.fillRect(0,0,W,62);
-    for(let i=0;i<70;i++){
-      ctx.fillStyle=['#ff2e9a','#26e8ff','#ffe14d','#8cff5a','#b14bff'][i%5];
-      ctx.globalAlpha=0.35;
-      ctx.fillRect((i*31)%W, 8+((i*13)%44), 4, 4);
-    }
-    ctx.globalAlpha=1;
-
-    // Cesped con rayas
-    ctx.fillStyle='#1e6b34'; ctx.fillRect(0,ARCO.y+ARCO.h-6,W,H);
-    for(let i=0;i<8;i++){
-      ctx.fillStyle= i%2 ? 'rgba(255,255,255,.03)' : 'rgba(0,0,0,.06)';
-      ctx.fillRect(0, ARCO.y+ARCO.h-6+i*24, W, 24);
-    }
-    // Area grande
-    ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
-    ctx.strokeRect(28, ARCO.y+ARCO.h-6, W-56, 96);
-    // Punto del penal
-    ctx.fillStyle='rgba(255,255,255,.6)';
-    ctx.beginPath(); ctx.arc(W/2, PELOTA_Y+14, 3, 0, 7); ctx.fill();
-
-    // ARCO: postes y red
-    ctx.strokeStyle='rgba(255,255,255,.22)'; ctx.lineWidth=1;
-    for(let x=ARCO.x; x<=ARCO.x+ARCO.w; x+=12){
-      ctx.beginPath(); ctx.moveTo(x,ARCO.y); ctx.lineTo(x,ARCO.y+ARCO.h); ctx.stroke();
-    }
-    for(let y=ARCO.y; y<=ARCO.y+ARCO.h; y+=12){
-      ctx.beginPath(); ctx.moveTo(ARCO.x,y); ctx.lineTo(ARCO.x+ARCO.w,y); ctx.stroke();
-    }
-    ctx.strokeStyle='#ffffff'; ctx.lineWidth=6; ctx.lineCap='round';
-    ctx.beginPath();
-    ctx.moveTo(ARCO.x, ARCO.y+ARCO.h); ctx.lineTo(ARCO.x, ARCO.y);
-    ctx.lineTo(ARCO.x+ARCO.w, ARCO.y); ctx.lineTo(ARCO.x+ARCO.w, ARCO.y+ARCO.h);
-    ctx.stroke();
-
-    // Zonas del angulo (donde vale doble)
-    if(fase==='mira'||fase==='potencia'){
-      ctx.fillStyle='rgba(255,225,77,.12)';
-      ctx.fillRect(ARCO.x+6, ARCO.y+6, 64, 32);
-      ctx.fillRect(ARCO.x+ARCO.w-70, ARCO.y+6, 64, 32);
-      ctx.fillStyle='rgba(255,225,77,.5)'; ctx.font='700 10px "Baloo 2",serif';
-      ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText('x2', ARCO.x+38, ARCO.y+22);
-      ctx.fillText('x2', ARCO.x+ARCO.w-38, ARCO.y+22);
-    }
-
-    dibujarArquero();
-    dibujarPateador();
-
-    // Pelota
-    ctx.save();
-    ctx.translate(pelota.x, pelota.y);
-    ctx.scale(pelota.escala, pelota.escala);
-    ctx.font='24px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText('⚽',0,0);
-    ctx.restore();
-
-    // Mira
-    if(fase==='mira'){
-      ctx.strokeStyle='#ff2e9a'; ctx.lineWidth=3;
-      ctx.beginPath(); ctx.arc(mira.x, ARCO.y+ARCO.h/2, 13, 0, 7); ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(mira.x-19, ARCO.y+ARCO.h/2); ctx.lineTo(mira.x+19, ARCO.y+ARCO.h/2);
-      ctx.moveTo(mira.x, ARCO.y+ARCO.h/2-19); ctx.lineTo(mira.x, ARCO.y+ARCO.h/2+19);
-      ctx.stroke();
-    }
-
-    // Barra de potencia
-    if(fase==='potencia'){
-      const bx=20, by=H-92, bw=W-40, bh=16;
-      ctx.fillStyle='#0a0416'; rr(ctx,bx,by,bw,bh,8); ctx.fill();
-      const gr=ctx.createLinearGradient(bx,0,bx+bw,0);
-      gr.addColorStop(0,'#8cff5a'); gr.addColorStop(0.6,'#ffe14d'); gr.addColorStop(1,'#ff2e9a');
-      ctx.fillStyle=gr; rr(ctx,bx,by,bw*potencia/100,bh,8); ctx.fill();
-      ctx.strokeStyle='#fff'; ctx.lineWidth=2; rr(ctx,bx,by,bw,bh,8); ctx.stroke();
-      ctx.fillStyle='#fff'; ctx.font='700 12px "Baloo 2",serif';
-      ctx.textAlign='center'; ctx.textBaseline='bottom';
-      ctx.fillText('POTENCIA', W/2, by-4);
-      // Marca de la zona "buena" (ni muy flojo ni muy alto)
-      ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1;
-      ctx.beginPath(); ctx.moveTo(bx+bw*0.45,by); ctx.lineTo(bx+bw*0.45,by+bh); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(bx+bw*0.85,by); ctx.lineTo(bx+bw*0.85,by+bh); ctx.stroke();
-    }
-
-    // Aviso de resultado
-    if(aviso){
-      ctx.save();
-      ctx.globalAlpha=Math.min(1, aviso.t/500);
-      ctx.font='700 22px "Baloo 2",serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillStyle=aviso.color; ctx.strokeStyle='#0a0416'; ctx.lineWidth=5;
-      ctx.strokeText(aviso.texto, W/2, H/2-10);
-      ctx.fillText(aviso.texto, W/2, H/2-10);
-      ctx.restore();
-    }
-  }
-
-  /* ---------- Controles ---------- */
-  const btn=el.querySelector('#pShoot');
-  btn.addEventListener('contextmenu',e=>e.preventDefault());
-  btn.addEventListener('pointerdown',e=>{e.preventDefault(); accion();});
-  cv.addEventListener('pointerdown',e=>{e.preventDefault(); accion();});
-  cv.addEventListener('contextmenu',e=>e.preventDefault());
-  function kd(e){ if(e.key===' '){ e.preventDefault(); accion(); } }
-  document.addEventListener('keydown',kd);
-
-  startLevel(1);
-  cleanup=()=>{ if(raf) cancelAnimationFrame(raf); document.removeEventListener('keydown',kd); };
 }
 
 /* ================================================================
