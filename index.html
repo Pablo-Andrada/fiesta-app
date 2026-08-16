@@ -404,7 +404,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <div id="retomar" style="display:none;margin:0 0 14px">
       <p class="tip" style="margin:0 0 8px">¿Ya jugaste antes? Tocá tu nombre 👇</p>
       <div id="listaCuentas"></div>
-      <button class="btn" id="btnOtroJugador" style="width:100%;margin-top:8px">➕ Soy otro jugador</button>
+      <p class="tip" style="margin:14px 0 2px;opacity:.75">— o entrá con el código —</p>
     </div>
 
     <!-- Paso 1 -->
@@ -708,10 +708,11 @@ function mostrarBotonRetomar(){
       '</button>';
   }).join('');
   box.style.display='block';
-  // Mostramos SOLO la lista: el formulario de crear jugador aparece
-  // recien si toca "Soy otro jugador" (asi no se ve todo junto).
+  // Mostramos la lista de cuentas ARRIBA, pero dejamos visible el
+  // campo del codigo (paso 1). Es importante: por ahi se entra a
+  // otra fiesta y tambien se escribe ADMIN para el panel.
   document.getElementById('paso2').classList.remove('on');
-  document.getElementById('paso1').classList.remove('on');
+  document.getElementById('paso1').classList.add('on');
 
   // Tocar una cuenta = entrar con ella
   cont.querySelectorAll('.cuenta-btn').forEach(function(b){
@@ -737,30 +738,6 @@ function mostrarBotonRetomar(){
     };
   });
 }
-
-/* "Soy otro jugador": va a la pantalla de crear apodo/avatar,
-   sin borrar las cuentas que ya estan guardadas. */
-document.getElementById('btnOtroJugador').onclick=async function(){
-  Fiesta.olvidarSesion();
-  document.getElementById('retomar').style.display='none';
-  // Si ya sabemos de que fiesta se trata, vamos directo a elegir
-  // apodo; si no, pedimos el codigo primero.
-  let cod = Fiesta.estado.fiesta && Fiesta.estado.fiesta.codigo;
-  if(!cod){
-    const guardadas=Fiesta.cuentasGuardadas(null);
-    if(guardadas.length) cod=guardadas[guardadas.length-1].codigo;
-    if(cod) await Fiesta.buscarFiesta(cod);
-  }
-  if(cod && Fiesta.estado.fiesta){
-    if(Fiesta.estado.fiesta.festejado){
-      document.getElementById('entTitulo').innerHTML='¡CUMPLE DE<br>'+Fiesta.estado.fiesta.festejado.toUpperCase()+'!';
-    }
-    mostrarPaso2();
-  } else {
-    document.getElementById('paso1').classList.add('on');
-    document.getElementById('inpCodigo').focus();
-  }
-};
 
 /* Boton para prender / apagar el sonido */
 document.getElementById('btnSonido').onclick=function(){
@@ -1033,6 +1010,8 @@ function abrirAdmin(){
   // Usamos getElementById directo (no la const admPanel) porque
   // esta funcion puede ejecutarse al cargar la pagina con ?admin=1,
   // antes de que esa const se termine de inicializar.
+  const ret=document.getElementById('retomar');
+  if(ret) ret.style.display='none';        // el admin no elige cuenta de jugador
   document.getElementById('adminPanel').classList.add('open');
   document.getElementById('admLoginMaestro').style.display='block';
   document.getElementById('admFiestas').style.display='none';
