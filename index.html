@@ -117,9 +117,16 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 /* ----------------------------------------------------------------
    RANKING
    ---------------------------------------------------------------- */
-.filtros{ display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; margin-bottom:12px }
-.filtro{ flex:0 0 auto; font-family:"Baloo 2"; font-weight:800; font-size:13px; padding:7px 14px; border-radius:999px;
-  border:3px solid var(--ink); background:var(--panel2); color:var(--muted); cursor:pointer }
+/* NIVEL 1: los dos rankings principales, mitad y mitad */
+.filtros{ display:flex; gap:8px; margin-bottom:10px }
+.filtro-tab{ flex:1; font-family:"Baloo 2"; font-weight:800; font-size:15px; padding:11px 8px;
+  border-radius:14px; border:3px solid var(--ink); background:var(--panel2); color:var(--muted);
+  cursor:pointer; box-shadow:3px 3px 0 rgba(10,4,22,.5) }
+.filtro-tab.on{ background:var(--yellow); color:var(--ink); box-shadow:3px 3px 0 rgba(10,4,22,.7) }
+/* NIVEL 2: los juegos (solo dentro del General) */
+.filtros-juego{ display:flex; gap:6px; overflow-x:auto; padding-bottom:8px; margin-bottom:12px }
+.filtro{ flex:0 0 auto; font-family:"Baloo 2"; font-weight:800; font-size:12px; padding:6px 12px; border-radius:999px;
+  border:2px solid var(--ink); background:var(--panel2); color:var(--muted); cursor:pointer }
 .filtro.on{ background:var(--violet); color:#fff }
 .rank-row{ display:flex; align-items:center; gap:12px; border:3px solid var(--ink); border-radius:16px; padding:10px 14px; margin-bottom:9px;
   background:linear-gradient(150deg,var(--panel),var(--panel2)); box-shadow:4px 4px 0 rgba(10,4,22,.5) }
@@ -546,6 +553,7 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
     <h2 class="sec-title" style="color:var(--yellow);text-shadow:2px 2px 0 var(--ink),0 0 18px rgba(255,225,77,.55)">🏆 RANKING</h2>
     <p class="sec-sub" id="subRanking">¿Quién va ganando la fiesta?</p>
     <div class="filtros" id="filtros"></div>
+    <div class="filtros-juego" id="filtrosJuego"></div>
     <div id="listaRanking"><div class="vacio">Cargando…</div></div>
   </section>
 
@@ -839,22 +847,37 @@ function renderJuegos(){
    ================================================================ */
 let filtroActual='global';
 function renderFiltros(){
-  // Dos rankings distintos + uno por cada juego:
-  //   🌟 General   -> puntos por puesto (quien juega mejor)
+  // NIVEL 1: los DOS rankings de verdad, mitad y mitad, bien grandes.
+  //   🏆 General   -> puntos por puesto (quien juega mejor)
   //   ⭐ Estrellas -> estrellas acumuladas (quien juega mas seguido)
-  const opciones=[{id:'global',nombre:'🌟 General'},{id:'estrellas',nombre:'⭐ Estrellas'}]
+  // Un juego puntual cuenta como parte del General (es el mismo
+  // ranking pero mirado de a un juego), asi que mientras haya un
+  // juego elegido, "General" queda igual marcado como activo.
+  const enEstrellas = (filtroActual==='estrellas');
+  document.getElementById('filtros').innerHTML=
+    `<button class="filtro-tab ${!enEstrellas?'on':''}" onclick="cambiarFiltro('global')">🏆 General</button>`+
+    `<button class="filtro-tab ${enEstrellas?'on':''}" onclick="cambiarFiltro('estrellas')">⭐ Estrellas</button>`;
+
+  // NIVEL 2: los juegos, SOLO dentro del General (en Estrellas no
+  // tienen sentido, porque las estrellas son una sola cuenta global).
+  const sub=document.getElementById('filtrosJuego');
+  if(!sub) return;
+  if(enEstrellas){ sub.innerHTML=''; sub.style.display='none'; return; }
+  sub.style.display='flex';
+  const opciones=[{id:'global',nombre:'✨ Todos'}]
     .concat(JUEGOS.map(j=>({id:j.id,nombre:j.icono+' '+j.nombre})));
-  document.getElementById('filtros').innerHTML=opciones.map(o=>
+  sub.innerHTML=opciones.map(o=>
     `<button class="filtro ${o.id===filtroActual?'on':''}" onclick="cambiarFiltro('${o.id}')">${o.nombre}</button>`).join('');
 }
 /* Explica al jugador como se calcula lo que esta viendo */
 function actualizarSubRanking(){
   const sub=document.getElementById('subRanking');
   if(!sub) return;
-  sub.textContent =
-    filtroActual==='global'    ? 'Ganás puntos según tu puesto en cada juego 🥇10 🥈8 🥉6' :
-    filtroActual==='estrellas' ? 'Las estrellas nunca bajan: el que más juega, más sube ⭐' :
-                                 'Mejores puntajes de este juego';
+  if(filtroActual==='global'){    sub.textContent='Ganás puntos según tu puesto en cada juego 🥇10 🥈8 🥉6'; return; }
+  if(filtroActual==='estrellas'){ sub.textContent='Las estrellas nunca bajan: el que más juega, más sube ⭐'; return; }
+  // Un juego puntual: decimos cual es
+  const j=JUEGOS.find(x=>x.id===filtroActual);
+  sub.textContent = j ? ('Mejores puntajes de '+j.nombre+' '+j.icono) : 'Mejores puntajes de este juego';
 }
 function cambiarFiltro(id){ filtroActual=id; renderFiltros(); cargarRanking(); actualizarSubRanking(); }
 
