@@ -1711,11 +1711,11 @@ function Memoria(el){
    VIBORITA · 5 niveles · traspasa paredes · (más lenta y fácil)
    ============================================================ */
 const SNAKE_LEVELS=[
-  { meta:18, speed:140, obst:3 },
-  { meta:26, speed:126, obst:6 },
-  { meta:34, speed:114, obst:10 },
-  { meta:42, speed:103, obst:14 },
-  { meta:52, speed:92,  obst:18 },
+  { meta:18, speed:190, obst:3 },
+  { meta:26, speed:172, obst:6 },
+  { meta:34, speed:155, obst:10 },
+  { meta:42, speed:140, obst:14 },
+  { meta:52, speed:126, obst:18 },
 ];
 function Snake(el){
   el.innerHTML=`<h2>🐍 Viborita</h2>
@@ -1727,10 +1727,10 @@ function Snake(el){
       <span class="sp"></span><button class="btn" data-d="down">▼</button><span class="sp"></span></div>
     <div class="banner" id="sBanner"></div>`;
   const cv=el.querySelector('#snakeCanvas'), ctx=cv.getContext('2d'); const N=15, S=cv.width/N;
-  let level,metaCount,score,snake,dir,nextDir,food,obst,alive,paused,loop,done;
+  let level,metaCount,score,snake,dir,nextDir,food,obst,alive,paused,loop,done,tick;
   function startLevel(l){
     level=l; const cfg=nivelDe(SNAKE_LEVELS, l);
-    metaCount=0; snake=[{x:7,y:7}]; dir={x:1,y:0}; nextDir=dir; alive=true; paused=false; done=false;
+    metaCount=0; snake=[{x:7,y:7}]; dir={x:1,y:0}; nextDir=dir; alive=true; paused=false; done=false; tick=0;
     obst=genObst(cfg.obst); placeFood();
     el.querySelector('#sLv').textContent='Nivel '+l+'/5'; el.querySelector('#sMeta').textContent='0/'+cfg.meta; el.querySelector('#sBanner').textContent='';
     if(loop) clearInterval(loop); loop=setInterval(step,cfg.speed); draw();
@@ -1748,7 +1748,7 @@ function Snake(el){
     food.pasos = 10;   // cuantos "pasos" de la viborita dura siendo dorada
   }
   function step(){
-    if(!alive||paused||done)return; dir=nextDir;
+    if(!alive||paused||done)return; dir=nextDir; tick++;
     let hx=(snake[0].x+dir.x+N)%N, hy=(snake[0].y+dir.y+N)%N; const head={x:hx,y:hy};
     if(snake.some(s=>s.x===hx&&s.y===hy) || obst.has(hx+','+hy)){ alive=false; Sonido.play('gameover'); Sonido.vibrar(120); el.querySelector('#sBanner').innerHTML=`<span style="color:var(--magenta)">¡Perdiste!</span>`; addRetry(); return; }
     snake.unshift(head);
@@ -1777,12 +1777,74 @@ function Snake(el){
   function addRetry(){ if(loop) clearInterval(loop); const bn=el.querySelector('#sBanner');
     const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel'; b.onclick=()=>startLevel(level);
     bn.appendChild(document.createElement('br')); bn.appendChild(b); }
+  // Rectángulo con esquinas redondeadas (para obstáculos)
+  function rrect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  // Dibuja un tramo del cuerpo como una línea gruesa y redondeada
+  function trazarTramo(run){
+    ctx.beginPath();
+    run.forEach((c,i)=>{ const px=c.x*S+S/2, py=c.y*S+S/2; i===0?ctx.moveTo(px,py):ctx.lineTo(px,py); });
+    if(run.length===1){ const c=run[0]; ctx.lineTo(c.x*S+S/2+0.01, c.y*S+S/2); } // un solo segmento = puntito redondo
+    ctx.stroke();
+  }
   function draw(){
+    // Fondo
     ctx.fillStyle='#0a0416'; ctx.fillRect(0,0,cv.width,cv.height);
-    ctx.fillStyle='#5b3a8a'; obst.forEach(k=>{ const [x,y]=k.split(',').map(Number); ctx.fillRect(x*S+1,y*S+1,S-2,S-2); });
-    ctx.fillStyle= food.dorada ? '#ffe14d' : '#ff2e9a';
-    ctx.fillRect(food.x*S+2,food.y*S+2,S-4,S-4);
-    snake.forEach((s,i)=>{ ctx.fillStyle=i===0?'#8cff5a':'#26e8ff'; ctx.fillRect(s.x*S+1,s.y*S+1,S-2,S-2); });
+    // Obstáculos (bloques redondeados)
+    ctx.fillStyle='#5b3a8a';
+    obst.forEach(k=>{ const [x,y]=k.split(',').map(Number); rrect(x*S+1,y*S+1,S-2,S-2,4); ctx.fill(); });
+    // Comida redonda (manzana rosa o dorada) con brillito
+    const fcx=food.x*S+S/2, fcy=food.y*S+S/2, fr=(S-4)/2;
+    ctx.fillStyle = food.dorada ? '#ffe14d' : '#ff2e9a';
+    ctx.beginPath(); ctx.arc(fcx,fcy,fr,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    ctx.beginPath(); ctx.arc(fcx-fr*0.3, fcy-fr*0.3, fr*0.28, 0, Math.PI*2); ctx.fill();
+
+    // ===== CUERPO DE LA VIBORITA =====
+    // Corto la viborita en "tramos" de celdas realmente vecinas. Así, cuando
+    // atraviesa una pared (traspaso), NO dibujo una línea gigante cruzando la
+    // pantalla: corto el tramo ahí y sigo del otro lado.
+    const runs=[]; let cur=[snake[0]];
+    for(let i=1;i<snake.length;i++){
+      const a=snake[i-1], b=snake[i];
+      const vecinos = (Math.abs(a.x-b.x)+Math.abs(a.y-b.y))===1;
+      if(vecinos) cur.push(b); else { runs.push(cur); cur=[b]; }
+    }
+    runs.push(cur);
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    // Contorno verde oscuro (le da volumen)
+    ctx.strokeStyle='#0f7d2e'; ctx.lineWidth=S-2;  runs.forEach(trazarTramo);
+    // Cuerpo verde claro
+    ctx.strokeStyle='#39e75f'; ctx.lineWidth=S-7;  runs.forEach(trazarTramo);
+    // Brillo arriba del cuerpo (efecto escamas)
+    ctx.strokeStyle='rgba(190,255,190,.5)'; ctx.lineWidth=Math.max(2,S-15); runs.forEach(trazarTramo);
+
+    // ===== CABEZA =====
+    const h=snake[0], hx=h.x*S+S/2, hy=h.y*S+S/2;
+    const dx=dir.x, dy=dir.y, ppx=-dir.y, ppy=dir.x; // hacia adelante y perpendicular
+    // Cabeza un poco más grande y redonda
+    ctx.fillStyle='#3df06a'; ctx.beginPath(); ctx.arc(hx,hy,(S-1)/2,0,Math.PI*2); ctx.fill();
+    ctx.lineWidth=2; ctx.strokeStyle='#0f7d2e'; ctx.stroke();
+    // Lengua bífida (parpadea con cada paso)
+    if(alive && !done && (tick%2===0)){
+      ctx.strokeStyle='#ff3b6b'; ctx.lineWidth=2; ctx.lineCap='round';
+      const bb=S*0.5, ll=S*0.32;
+      const bx=hx+dx*bb, by=hy+dy*bb, tipx=bx+dx*ll, tipy=by+dy*ll;
+      ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tipx,tipy); ctx.stroke();
+      const kx=ppx*ll*0.5, ky=ppy*ll*0.5;
+      ctx.beginPath(); ctx.moveTo(tipx,tipy); ctx.lineTo(tipx+dx*ll*0.4+kx, tipy+dy*ll*0.4+ky); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(tipx,tipy); ctx.lineTo(tipx+dx*ll*0.4-kx, tipy+dy*ll*0.4-ky); ctx.stroke();
+    }
+    // Ojos (blancos con pupila mirando hacia adelante)
+    const eR=S*0.12, fwd=S*0.10, side=S*0.20;
+    [1,-1].forEach(sg=>{
+      const ex=hx+dx*fwd+ppx*side*sg, ey=hy+dy*fwd+ppy*side*sg;
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(ex,ey,eR,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#08210f'; ctx.beginPath(); ctx.arc(ex+dx*eR*0.4, ey+dy*eR*0.4, eR*0.55,0,Math.PI*2); ctx.fill();
+    });
   }
   function setDir(d){ const m={up:{x:0,y:-1},down:{x:0,y:1},left:{x:-1,y:0},right:{x:1,y:0}}[d]; if(!m)return; if(m.x===-dir.x&&m.y===-dir.y)return; nextDir=m; }
   function key(e){ const map={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right',w:'up',s:'down',a:'left',d:'right'}; if(map[e.key]){ e.preventDefault(); setDir(map[e.key]); } }
