@@ -274,6 +274,26 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .cuenta-btn .x{ font-size:13px; color:var(--muted); padding:2px 8px; border-radius:8px }
 .cuenta-btn .x:hover{ background:var(--magenta); color:#fff }
 
+/* Aviso flotante "+45 ⭐" al ganar estrellas */
+#estrellasFx{ position:fixed; left:0; right:0; top:96px; z-index:190; display:flex; justify-content:center;
+  pointer-events:none; opacity:0; transform:translateY(10px); transition:opacity .25s, transform .25s }
+#estrellasFx.show{ opacity:1; transform:translateY(0) }
+#estrellasFx .est-in{ background:linear-gradient(150deg,var(--panel),var(--panel2)); border:3px solid var(--yellow);
+  border-radius:999px; padding:8px 20px; font-family:"Bangers",cursive; font-size:26px; color:var(--yellow);
+  letter-spacing:1px; text-shadow:0 0 12px rgba(255,225,77,.7); box-shadow:0 0 26px rgba(255,225,77,.45);
+  display:flex; flex-direction:column; align-items:center; line-height:1 }
+#estrellasFx .tot{ font-family:"Baloo 2"; font-size:11px; color:var(--muted); letter-spacing:0; margin-top:3px }
+
+/* Titulos (Novato, Experto, Leyenda...) al lado del nombre */
+.titulo{ display:inline-block; font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px;
+  border:2px solid var(--ink); margin-top:3px }
+.t-leyenda{ background:linear-gradient(90deg,#ffd700,#ff8c1a); color:#0a0416 }
+.t-maestro{ background:var(--violet); color:#fff }
+.t-experto{ background:var(--magenta); color:#fff }
+.t-veloz{ background:var(--cyan); color:#0a0416 }
+.t-jugador{ background:var(--lime); color:#0a0416 }
+.t-novato{ background:var(--panel2); color:var(--muted) }
+
 /* Cartel de NUEVO RECORD (global, para todos los juegos) */
 #recordFx{ position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
   pointer-events:none; opacity:0; transition:opacity .25s }
@@ -768,7 +788,11 @@ function renderJuegos(){
    ================================================================ */
 let filtroActual='global';
 function renderFiltros(){
-  const opciones=[{id:'global',nombre:'🌟 General'}].concat(JUEGOS.map(j=>({id:j.id,nombre:j.icono+' '+j.nombre})));
+  // Dos rankings distintos + uno por cada juego:
+  //   🌟 General   -> puntos por puesto (quien juega mejor)
+  //   ⭐ Estrellas -> estrellas acumuladas (quien juega mas seguido)
+  const opciones=[{id:'global',nombre:'🌟 General'},{id:'estrellas',nombre:'⭐ Estrellas'}]
+    .concat(JUEGOS.map(j=>({id:j.id,nombre:j.icono+' '+j.nombre})));
   document.getElementById('filtros').innerHTML=opciones.map(o=>
     `<button class="filtro ${o.id===filtroActual?'on':''}" onclick="cambiarFiltro('${o.id}')">${o.nombre}</button>`).join('');
 }
@@ -776,15 +800,45 @@ function renderFiltros(){
 function actualizarSubRanking(){
   const sub=document.getElementById('subRanking');
   if(!sub) return;
-  sub.textContent = filtroActual==='global'
-    ? 'Ganás puntos según tu puesto en cada juego 🥇10 🥈8 🥉6'
-    : 'Mejores puntajes de este juego';
+  sub.textContent =
+    filtroActual==='global'    ? 'Ganás puntos según tu puesto en cada juego 🥇10 🥈8 🥉6' :
+    filtroActual==='estrellas' ? 'Las estrellas nunca bajan: el que más juega, más sube ⭐' :
+                                 'Mejores puntajes de este juego';
 }
 function cambiarFiltro(id){ filtroActual=id; renderFiltros(); cargarRanking(); actualizarSubRanking(); }
+
+/* Nombre lindo de cada titulo, segun las estrellas acumuladas */
+const TITULOS={
+  leyenda:'👑 LEYENDA', maestro:'💎 MAESTRO', experto:'🔥 EXPERTO',
+  veloz:'⚡ VELOZ', jugador:'🎮 JUGADOR', novato:'🥚 NOVATO',
+};
 
 async function cargarRanking(){
   const cont=document.getElementById('listaRanking');
   cont.innerHTML='<div class="vacio">Cargando…</div>';
+
+  // ⭐ RANKING DE ESTRELLAS (acumuladas, con titulos)
+  if(filtroActual==='estrellas'){
+    const filas=await Fiesta.rankingEstrellas();
+    if(!filas.length){ cont.innerHTML='<div class="vacio">Todavía nadie ganó estrellas.<br>¡Jugá y sumá las primeras! ⭐</div>'; return; }
+    const medalla=i=>['🥇','🥈','🥉'][i]||('#'+(i+1));
+    cont.innerHTML=filas.map((f,i)=>{
+      const esYo=f.apodo===Fiesta.estado.apodo;
+      const tit=TITULOS[f.titulo]||TITULOS.novato;
+      const det=[];
+      if(f.nivel_max) det.push('Nivel '+f.nivel_max);
+      if(f.jefes)     det.push(f.jefes+' jefe'+(f.jefes>1?'s':''));
+      return `<div class="rank-row ${i<3?'top'+(i+1):''} ${esYo?'yo':''}">
+        <div class="pos">${medalla(i)}</div><div class="ava">${escapar(f.avatar)}</div>
+        <div class="nom">${escapar(f.apodo)}${esYo?' (vos)':''}
+          <div><span class="titulo t-${f.titulo}">${tit}</span></div>
+          ${det.length?`<div style="font-size:11px;color:var(--muted);font-weight:600">${det.join(' · ')}</div>`:''}
+        </div>
+        <div class="pts">${f.total} ⭐</div></div>`;
+    }).join('');
+    return;
+  }
+
   const filas = filtroActual==='global'
     ? await Fiesta.rankingGlobal()
     : await Fiesta.rankingJuego(filtroActual);
@@ -1397,7 +1451,7 @@ function Memoria(el){
   el.querySelector('#mReset').onclick=()=>{ level=1; build(); };
   let first,lock,pairs,moves,need,fs,racha,revelando,mejorRacha;
   function build(){
-    const cfg=MEM_LEVELS[level-1];
+    const cfg=nivelDe(MEM_LEVELS, level);
     el.querySelector('#mLv').textContent='Nivel '+level+'/5'; el.querySelector('#mMoves').textContent='0';
     banner.textContent=''; first=null; lock=false; pairs=0; moves=0; need=cfg.pairs; racha=0; revelando=false; mejorRacha=0;
     fs = cfg.cols<=4?28:(cfg.cols===5?23:19);
@@ -1446,10 +1500,15 @@ function Memoria(el){
     Sonido.play('nivel'); awardLevel('memoria', level);
     const bonusRacha = mejorRacha>=3 ? mejorRacha*10 : 0;
     Fiesta.guardarPuntaje('memoria', level*100+bonusRacha, level); burst();
-    if(level<5){ banner.innerHTML=`¡Nivel ${level} listo! ⭐`;
-      const b=document.createElement('button'); b.className='btn mt'; b.textContent='Siguiente nivel ▶'; b.onclick=()=>{ level++; build(); };
+    Fiesta.sumarEstrellas('memoria', level, false);   // ⭐ siempre suma
+    if(true){ // ♾️ siempre hay un nivel mas
+      const inf = esInfinito(MEM_LEVELS, level+1);
+      banner.innerHTML = inf ? `¡Nivel ${level} listo! ♾️` : `¡Nivel ${level} listo! ⭐`;
+      const b=document.createElement('button'); b.className='btn mt';
+      b.textContent = (inf?'♾️ Siguiente nivel ':'Siguiente nivel ')+'▶';
+      b.onclick=()=>{ level++; build(); };
       banner.appendChild(document.createElement('br')); banner.appendChild(b);
-    }else banner.innerHTML=`🏆 ¡Completaste la Memoria! 5 ⭐`;
+    }
   }
   build();
 }
@@ -1476,7 +1535,7 @@ function Snake(el){
   const cv=el.querySelector('#snakeCanvas'), ctx=cv.getContext('2d'); const N=15, S=cv.width/N;
   let level,metaCount,score,snake,dir,nextDir,food,obst,alive,paused,loop,done;
   function startLevel(l){
-    level=l; const cfg=SNAKE_LEVELS[l-1];
+    level=l; const cfg=nivelDe(SNAKE_LEVELS, l);
     metaCount=0; snake=[{x:7,y:7}]; dir={x:1,y:0}; nextDir=dir; alive=true; paused=false; done=false;
     obst=genObst(cfg.obst); placeFood();
     el.querySelector('#sLv').textContent='Nivel '+l+'/5'; el.querySelector('#sMeta').textContent='0/'+cfg.meta; el.querySelector('#sBanner').textContent='';
@@ -1504,7 +1563,7 @@ function Snake(el){
     if(hx===food.x&&hy===food.y){
       const vale = food.dorada ? 3 : 1;
       Sonido.play(food.dorada?'powerup':'comer'); score=(score||0)+vale; metaCount+=vale; el.querySelector('#sScore').textContent=score;
-      const cfg=SNAKE_LEVELS[level-1]; el.querySelector('#sMeta').textContent=Math.min(metaCount,cfg.meta)+'/'+cfg.meta;
+      const cfg=nivelDe(SNAKE_LEVELS, level); el.querySelector('#sMeta').textContent=Math.min(metaCount,cfg.meta)+'/'+cfg.meta;
       if(score>(Scores.data.snakeBest||0)){ Scores.data.snakeBest=score; Scores.save(); }
       if(metaCount>=cfg.meta){ levelUp(); return; } placeFood();
     }else snake.pop();
@@ -1512,10 +1571,14 @@ function Snake(el){
   }
   function levelUp(){
     Sonido.play('nivel'); awardLevel('snake', level); Fiesta.guardarPuntaje('snake', score, level); burst();
-    if(level<5){ done=true; if(loop) clearInterval(loop); const bn=el.querySelector('#sBanner'); bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
-      const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
-      bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    }else{ done=true; if(loop) clearInterval(loop); el.querySelector('#sBanner').innerHTML=`🏆 ¡Ganaste la Viborita! 5 ⭐`; }
+    Fiesta.sumarEstrellas('snake', level, false);
+    done=true; if(loop) clearInterval(loop);
+    const bn=el.querySelector('#sBanner');
+    const inf = esInfinito(SNAKE_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
   function addRetry(){ if(loop) clearInterval(loop); const bn=el.querySelector('#sBanner');
     const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel'; b.onclick=()=>startLevel(level);
@@ -1568,7 +1631,7 @@ function Autos(el){
   let level,lane,cars,dodged,alive,done,speed,spawnMs,spawnT,raf,last,roadOff=0,explosionAuto=null,bonusAviso=null;
   let escudos=0, nitroT=0;
   function startLevel(l){
-    level=l; const cfg=AUTO_LEVELS[l-1];
+    level=l; const cfg=nivelDe(AUTO_LEVELS, l);
     lane=1; cars=[]; dodged=0; alive=true; done=false; explosionAuto=null; bonusAviso=null; speed=cfg.speed; spawnMs=cfg.spawn; spawnT=0; last=performance.now();
     escudos=0; nitroT=0;
     el.querySelector('#aLv').textContent='Nivel '+l+'/5'; el.querySelector('#aMeta').textContent='0/'+cfg.meta; el.querySelector('#aBanner').textContent='';
@@ -1580,7 +1643,7 @@ function Autos(el){
       if(nitroT>0) nitroT=Math.max(0,nitroT-dt);
       const velActual = speed*(nitroT>0?1.6:1);
       spawnT+=dt; if(spawnT>=spawnMs){ spawnT=0; spawnCar(); }
-      const cfg=AUTO_LEVELS[level-1];
+      const cfg=nivelDe(AUTO_LEVELS, level);
       for(let i=cars.length-1;i>=0;i--){ const c=cars[i]; c.y+=velActual*(dt/16.7);
         if(c.lane===lane && Math.abs(c.y-playerY)<36){
           if(c.tipo){
@@ -1776,9 +1839,14 @@ function Autos(el){
     }
   }
   function crash(){ alive=false; explosionAuto={x:LANES[lane], y:playerY, t:900}; Sonido.play('choque'); Sonido.vibrar(140); el.querySelector('#aBanner').innerHTML=`<span style="color:var(--magenta)">¡Chocaste! 💥</span>`; addRetry(); }
-  function levelUp(){ Sonido.play('nivel'); awardLevel('autos', level); Fiesta.guardarPuntaje('autos', dodged + (level-1)*50, level); burst(); done=true; const bn=el.querySelector('#aBanner');
-    if(level<5){ bn.innerHTML=`¡Nivel ${level} superado! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
-    else bn.innerHTML=`🏆 ¡Ganaste los Autitos! 5 ⭐`; }
+  function levelUp(){ Sonido.play('nivel'); awardLevel('autos', level); Fiesta.guardarPuntaje('autos', dodged + (level-1)*50, level); burst(); done=true;
+    Fiesta.sumarEstrellas('autos', level, false);
+    const bn=el.querySelector('#aBanner');
+    const inf = esInfinito(AUTO_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b); }
   function addRetry(){ const bn=el.querySelector('#aBanner'); const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel'; b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
   function move(d){ if(!alive||done)return; lane=Math.max(0,Math.min(2,lane+d)); }
   el.querySelector('#aL').onclick=()=>move(-1); el.querySelector('#aR').onclick=()=>move(1);
@@ -1803,7 +1871,7 @@ function Basquet(el){
   let level,made,ball,hoop,drag,aim,done,raf,prevY;
   let racha=0, enLlamas=false;   // 🔥 modo "en llamas": 3 seguidas sin fallar
   function startLevel(l){
-    level=l; const cfg=BASKET_LEVELS[l-1]; made=0; done=false; drag=false; aim=null;
+    level=l; const cfg=nivelDe(BASKET_LEVELS, l); made=0; done=false; drag=false; aim=null;
     ball={x:baseX,y:baseY,vx:0,vy:0,flying:false}; prevY=baseY; hoop={x:W/2+50,y:96,dir:1,move:cfg.move};
     racha=0; enLlamas=false;
     el.querySelector('#bLv').textContent='Nivel '+l+'/5'; el.querySelector('#bMeta').textContent='0/'+cfg.meta; el.querySelector('#bBanner').textContent='';
@@ -1823,14 +1891,19 @@ function Basquet(el){
     racha++;
     if(racha>=3 && !enLlamas){ enLlamas=true; Sonido.play('powerup'); }
     made += enLlamas ? 2 : 1;   // 🔥 en llamas, cada enceste vale doble para la meta
-    const cfg=BASKET_LEVELS[level-1];
+    const cfg=nivelDe(BASKET_LEVELS, level);
     el.querySelector('#bMeta').textContent=Math.min(made,cfg.meta)+'/'+cfg.meta;
     resetBall();
     if(made>=cfg.meta) levelUp(); else burst(enLlamas?70:40);
   }
-  function levelUp(){ Sonido.play('nivel'); awardLevel('basquet', level); Fiesta.guardarPuntaje('basquet', level*100, level); burst(); done=true; const bn=el.querySelector('#bBanner');
-    if(level<5){ bn.innerHTML=`¡Nivel ${level} superado! ⭐`; const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b); }
-    else bn.innerHTML=`🏆 ¡Ganaste el Básquet! 5 ⭐`; }
+  function levelUp(){ Sonido.play('nivel'); awardLevel('basquet', level); Fiesta.guardarPuntaje('basquet', level*100, level); burst(); done=true;
+    Fiesta.sumarEstrellas('basquet', level, false);
+    const bn=el.querySelector('#bBanner');
+    const inf = esInfinito(BASKET_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b); }
   function draw(){
     /* ---- FONDO DE CANCHA DE BASQUET ---- */
     // Pared del gimnasio con degradado
@@ -1927,6 +2000,56 @@ const EQUIPOS=[
   { nombre:'Plasma',    color:'#ff8c1a', tiros:3, abanico:0.75, cadencia:180, dano:2, cometas:30 },
   { nombre:'MEGA LÁSER',color:'#ff2e9a', tiros:5, abanico:1.0,  cadencia:150, dano:3, cometas:0  },
 ];
+
+/* ================================================================
+   NIVELES INFINITOS ♾️
+   ----------------------------------------------------------------
+   Los juegos traen 5 niveles hechos a mano. Del 6 en adelante los
+   generamos solos: tomamos el ultimo nivel y le aplicamos el mismo
+   ritmo de dificultad que traia la tabla, con un tope para que no
+   se vuelva imposible de jugar.
+
+   nivelDe(tabla, n)  -> devuelve la config del nivel n (1, 2, 3... infinito)
+
+   Como se usa: en vez de TABLA[level-1], se escribe nivelDe(TABLA, level).
+   ================================================================ */
+function nivelDe(tabla, n){
+  if(n <= tabla.length) return tabla[n-1];
+
+  const ultimo = tabla[tabla.length-1];
+  const anterior = tabla[tabla.length-2] || ultimo;
+  const pasosExtra = n - tabla.length;      // cuantos niveles pasamos del ultimo
+  const cfg = {};
+
+  for(const clave in ultimo){
+    const vFin = ultimo[clave], vAnt = anterior[clave];
+    if(typeof vFin !== 'number'){ cfg[clave] = vFin; continue; }
+
+    if(vFin > vAnt){
+      // Valores que SUBEN (meta, velocidad): siguen subiendo, pero
+      // cada vez un poco menos, para que no se dispare.
+      const paso = (vFin - vAnt);
+      let v = vFin;
+      for(let i=0;i<pasosExtra;i++) v += paso * Math.pow(0.92, i);
+      cfg[clave] = (clave==='meta'||clave==='pairs'||clave==='cols') ? Math.round(v) : +v.toFixed(2);
+    } else if(vFin < vAnt){
+      // Valores que BAJAN (tiempo entre enemigos): bajan cada vez
+      // menos y nunca por debajo del 45% del ultimo, asi sigue
+      // siendo jugable por mas que subas de nivel.
+      const paso = (vAnt - vFin);
+      let v = vFin;
+      for(let i=0;i<pasosExtra;i++) v -= paso * Math.pow(0.88, i);
+      const piso = vFin * 0.45;
+      cfg[clave] = Math.round(Math.max(piso, v));
+    } else {
+      cfg[clave] = vFin;
+    }
+  }
+  return cfg;
+}
+
+/* Devuelve true si el nivel ya es "modo infinito" (mas alla del 5) */
+function esInfinito(tabla, n){ return n > tabla.length; }
 
 const NAVE_LEVELS=[
   { meta:30, espd:1.6, spawn:820, tiroEnemigo:2200 },
@@ -2034,7 +2157,7 @@ function Nave(el){
 
   /* ---------- Arranque de cada nivel ---------- */
   function startLevel(l){
-    level=l; const cfg=NAVE_LEVELS[l-1];
+    level=l; const cfg=nivelDe(NAVE_LEVELS, l);
     kills=0; lives=3; shipX=W/2;
     equipo = (l===1) ? 0 : equipo;        // al reintentar el nivel 1 vuelve a la basica
     if(equipo===undefined) equipo=0;
@@ -2043,7 +2166,9 @@ function Nave(el){
     alive=true; done=false; spawnT=0; shootT=0; cometaT=0; powerT=0; lastShot=0; invul=0;
     escudoT=0; jefe=null; jefeDerrotado=false;
     last=performance.now(); moveL=moveR=firing=false;
-    el.querySelector('#nLv').textContent='Nivel '+l+'/5';
+    // El HUD muestra "Nivel 3/5" hasta el 5, y "♾️ Nivel 8" de ahi
+    // en adelante (modo infinito: los niveles no terminan nunca).
+    el.querySelector('#nLv').textContent = esInfinito(NAVE_LEVELS,l) ? '♾️ Nivel '+l : 'Nivel '+l+'/5';
     el.querySelector('#nMeta').textContent='0/'+cfg.meta;
     el.querySelector('#nLives').textContent='❤️❤️❤️';
     el.querySelector('#nBanner').textContent='';
@@ -2097,7 +2222,7 @@ function Nave(el){
   function frame(now){
     const dt=Math.min(50, now-last); last=now;
     if(alive && !done){
-      const cfg=NAVE_LEVELS[level-1], eq=EQUIPOS[equipo];
+      const cfg=nivelDe(NAVE_LEVELS, level), eq=EQUIPOS[equipo];
       if(invul>0) invul-=dt;
 
       /* Mover la nave */
@@ -2253,14 +2378,20 @@ function Nave(el){
   /* ---------- Pasar de nivel (se llama recien tras vencer al jefe) ---------- */
   function levelUp(){
     awardLevel('nave', level); Fiesta.guardarPuntaje('nave', kills + (level-1)*80, level);
+    // ⭐ Estrellas: siempre se suman, aunque ya hayas pasado el nivel.
+    //    El servidor calcula cuantas segun el nivel y si hubo jefe.
+    Fiesta.sumarEstrellas('nave', level, true);
     done=true; burst();
     const bn=el.querySelector('#nBanner');
-    if(level<5){
-      Sonido.play('nivel');
-      bn.innerHTML=`👾 ¡Jefe vencido! Nivel ${level} superado ⭐`;
-      const b=document.createElement('button'); b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
-      b.onclick=()=>startLevel(level+1); bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else { Sonido.play('victoria'); bn.innerHTML=`🏆 ¡Venciste al último jefe! Nave completa 5 ⭐`; }
+    Sonido.play('nivel');
+    const infinito = esInfinito(NAVE_LEVELS, level+1);
+    bn.innerHTML = infinito
+      ? `👾 ¡Jefe vencido! Nivel ${level} superado ♾️`
+      : `👾 ¡Jefe vencido! Nivel ${level} superado ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent = infinito ? '♾️ Nivel '+(level+1)+' ▶' : 'Nivel '+(level+1)+' ▶';
+    b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
 
   /* ---------- Dibujo de la nave segun la equipacion ---------- */
@@ -2567,7 +2698,7 @@ function Frutas(el){
     alive=true; done=false; spawnT=0; combo=0; comboT=0; comboTexto=null; congeladoT=0;
     last=performance.now();
     el.querySelector('#fLv').textContent='Nivel '+l+'/5';
-    el.querySelector('#fMeta').textContent='0/'+FRUTAS_LEVELS[l-1].meta;
+    el.querySelector('#fMeta').textContent='0/'+nivelDe(FRUTAS_LEVELS, l).meta;
     el.querySelector('#fLives').textContent='❤️❤️❤️';
     el.querySelector('#fBanner').textContent='';
     if(raf) cancelAnimationFrame(raf);
@@ -2576,7 +2707,7 @@ function Frutas(el){
 
   /* ---------- Lanzar una fruta o bomba desde abajo ---------- */
   function lanzar(){
-    const cfg=FRUTAS_LEVELS[level-1];
+    const cfg=nivelDe(FRUTAS_LEVELS, level);
     const azar=Math.random();
     const x=40+Math.random()*(W-80);
     const base={
@@ -2685,7 +2816,7 @@ function Frutas(el){
     else if(combo>=3){ comboTexto={ texto:'COMBO x'+combo, t:900 }; Sonido.play('powerup'); }
     else Sonido.play('comer');
 
-    const cfg=FRUTAS_LEVELS[level-1];
+    const cfg=nivelDe(FRUTAS_LEVELS, level);
     el.querySelector('#fMeta').textContent=Math.min(cortadas,cfg.meta)+'/'+cfg.meta;
     if(cortadas>=cfg.meta) levelUp();
   }
@@ -2702,19 +2833,18 @@ function Frutas(el){
     done=true;
     awardLevel('frutas', level);
     Fiesta.guardarPuntaje('frutas', cortadas + (level-1)*100, level);
+    Fiesta.sumarEstrellas('frutas', level, false);   // ⭐ siempre suma
     burst();
     const bn=el.querySelector('#fBanner');
-    if(level<5){
-      Sonido.play('nivel');
-      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
-      const b=document.createElement('button');
-      b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
-      b.onclick=()=>startLevel(level+1);
-      bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else {
-      Sonido.play('victoria');
-      bn.innerHTML=`🏆 ¡Ganaste las Frutas! 5 ⭐`;
-    }
+    // ♾️ Los niveles ya no terminan en el 5: siempre hay uno mas.
+    Sonido.play('nivel');
+    const inf = esInfinito(FRUTAS_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button');
+    b.className='btn mt';
+    b.textContent = (inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶';
+    b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
 
   /* ---------- Bucle principal ---------- */
@@ -2722,7 +2852,7 @@ function Frutas(el){
     const dt=Math.min(50, now-last); last=now;
 
     if(alive && !done){
-      const cfg=FRUTAS_LEVELS[level-1];
+      const cfg=nivelDe(FRUTAS_LEVELS, level);
       if(congeladoT>0) congeladoT=Math.max(0,congeladoT-dt);
       // 🧊 Con el hielo activo, todo se mueve mas lento (spawn y objetos).
       const lento = congeladoT>0 ? 0.45 : 1;
@@ -2964,7 +3094,7 @@ function Topos(el){
     comboCount=0; comboVenceEn=0;
     agujeros.forEach(a=>a.ocupado=null);
     el.querySelector('#tLv').textContent='Nivel '+l+'/5';
-    el.querySelector('#tMeta').textContent='0/'+TOPOS_LEVELS[l-1].meta;
+    el.querySelector('#tMeta').textContent='0/'+nivelDe(TOPOS_LEVELS, l).meta;
     el.querySelector('#tLives').textContent='❤️❤️❤️';
     el.querySelector('#tBanner').textContent='';
     if(raf) cancelAnimationFrame(raf);
@@ -2973,7 +3103,7 @@ function Topos(el){
 
   /* ---------- Sacar un bichito de un agujero libre ---------- */
   function asomar(){
-    const cfg=TOPOS_LEVELS[level-1];
+    const cfg=nivelDe(TOPOS_LEVELS, level);
     const libres=agujeros.filter(a=>!a.ocupado);
     if(!libres.length) return;
     // No pasarnos del maximo de bichitos a la vez
@@ -3019,19 +3149,18 @@ function Topos(el){
     done=true;
     awardLevel('topos', level);
     Fiesta.guardarPuntaje('topos', atrapados + (level-1)*80, level);
+    Fiesta.sumarEstrellas('topos', level, false);   // ⭐ siempre suma
     burst();
     const bn=el.querySelector('#tBanner');
-    if(level<5){
-      Sonido.play('nivel');
-      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
-      const b=document.createElement('button');
-      b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
-      b.onclick=()=>startLevel(level+1);
-      bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else {
-      Sonido.play('victoria');
-      bn.innerHTML=`🏆 ¡Ganaste los Topos! 5 ⭐`;
-    }
+    // ♾️ Los niveles ya no terminan en el 5: siempre hay uno mas.
+    Sonido.play('nivel');
+    const inf = esInfinito(FRUTAS_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button');
+    b.className='btn mt';
+    b.textContent = (inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶';
+    b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
 
   /* ---------- Bucle principal ---------- */
@@ -3039,7 +3168,7 @@ function Topos(el){
     const dt=Math.min(50, now-last); last=now;
 
     if(alive && !done){
-      const cfg=TOPOS_LEVELS[level-1];
+      const cfg=nivelDe(TOPOS_LEVELS, level);
 
       // Cada tanto sale un bichito nuevo
       spawnT+=dt;
@@ -3135,7 +3264,7 @@ function Topos(el){
     e.preventDefault();
     if(!alive || done) return;
     const p=posicion(e);
-    const cfg=TOPOS_LEVELS[level-1];
+    const cfg=nivelDe(TOPOS_LEVELS, level);
 
     for(const a of agujeros){
       const o=a.ocupado;
@@ -3252,7 +3381,7 @@ function Ritmo(el){
     fichas=[]; spawnT=0; racha=0; mejorRacha=0; avisos=[]; brillos=[0,0,0,0]; dedoAbajo=[false,false,false,false];
     last=performance.now();
     el.querySelector('#mLvR').textContent='Nivel '+l+'/5';
-    el.querySelector('#mMetaR').textContent='0/'+RITMO_LEVELS[l-1].meta;
+    el.querySelector('#mMetaR').textContent='0/'+nivelDe(RITMO_LEVELS, l).meta;
     el.querySelector('#mLivesR').textContent='❤️❤️❤️';
     el.querySelector('#mBannerR').textContent='';
     if(raf) cancelAnimationFrame(raf);
@@ -3261,7 +3390,7 @@ function Ritmo(el){
 
   /* ---------- Crear fichas ---------- */
   function crearFicha(){
-    const cfg=RITMO_LEVELS[level-1];
+    const cfg=nivelDe(RITMO_LEVELS, level);
     const col=(Math.random()*4)|0;
     // 🎵 NOTA LARGA: mas alta, hay que TOCAR y SOSTENER mientras pasa
     // para llevarse el bonus extra. Desde el nivel 2.
@@ -3296,19 +3425,18 @@ function Ritmo(el){
     done=true;
     awardLevel('ritmo', level);
     Fiesta.guardarPuntaje('ritmo', acertadas*10 + mejorRacha*5 + (level-1)*120, level);
+    Fiesta.sumarEstrellas('ritmo', level, false);   // ⭐ siempre suma
     burst();
     const bn=el.querySelector('#mBannerR');
-    if(level<5){
-      Sonido.play('nivel');
-      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
-      const b=document.createElement('button');
-      b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
-      b.onclick=()=>startLevel(level+1);
-      bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else {
-      Sonido.play('victoria');
-      bn.innerHTML=`🏆 ¡Ganaste el Ritmo! 5 ⭐`;
-    }
+    // ♾️ Los niveles ya no terminan en el 5: siempre hay uno mas.
+    Sonido.play('nivel');
+    const inf = esInfinito(FRUTAS_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button');
+    b.className='btn mt';
+    b.textContent = (inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶';
+    b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
 
   /* ---------- Tocar una columna ---------- */
@@ -3344,7 +3472,7 @@ function Ritmo(el){
 
     avisos.push({ texto, color, x:col*ANCHO_COL+ANCHO_COL/2, y:LINEA-20, vida:520 });
 
-    const cfg=RITMO_LEVELS[level-1];
+    const cfg=nivelDe(RITMO_LEVELS, level);
     el.querySelector('#mMetaR').textContent=Math.min(acertadas,cfg.meta)+'/'+cfg.meta;
     if(acertadas>=cfg.meta) levelUp();
   }
@@ -3374,7 +3502,7 @@ function Ritmo(el){
     const paso=dt/16.7;
 
     if(alive && !done){
-      const cfg=RITMO_LEVELS[level-1];
+      const cfg=nivelDe(RITMO_LEVELS, level);
 
       spawnT+=dt;
       if(spawnT>=cfg.intervalo){ spawnT=0; crearFicha(); }
@@ -3398,7 +3526,7 @@ function Ritmo(el){
               acertadas+=3; racha++; if(racha>mejorRacha) mejorRacha=racha;
               Sonido.play('powerup');
               avisos.push({ texto:'¡SOSTENIDA! +3', color:'#26e8ff', x:f.col*ANCHO_COL+ANCHO_COL/2, y:LINEA-20, vida:600 });
-              const cfgN=RITMO_LEVELS[level-1];
+              const cfgN=nivelDe(RITMO_LEVELS, level);
               el.querySelector('#mMetaR').textContent=Math.min(acertadas,cfgN.meta)+'/'+cfgN.meta;
               if(acertadas>=cfgN.meta){ levelUp(); return; }
             }
@@ -3559,7 +3687,7 @@ function Torre(el){
 
   /* ---------- Arranque ---------- */
   function startLevel(l){
-    level=l; const cfg=TORRE_LEVELS[l-1];
+    level=l; const cfg=nivelDe(TORRE_LEVELS, l);
     apilados=0; perfectos=0; alive=true; done=false; cayendo=[]; camaraY=0; avisos=[];
     last=performance.now();
 
@@ -3578,7 +3706,7 @@ function Torre(el){
   /* ---------- Preparar el proximo bloque en movimiento ---------- */
   function nuevoBloque(){
     const ultimo=torre[torre.length-1];
-    const cfg=TORRE_LEVELS[level-1];
+    const cfg=nivelDe(TORRE_LEVELS, level);
     actual={
       x: Math.random()<0.5 ? 0 : W-ultimo.ancho,
       ancho: ultimo.ancho,
@@ -3618,7 +3746,7 @@ function Torre(el){
     if(esPerfecto){
       // Encaje perfecto: no se corta nada y hasta crece un poquito
       perfectos++;
-      const nuevoAncho=Math.min(ultimo.ancho+6, TORRE_LEVELS[level-1].anchoInicial);
+      const nuevoAncho=Math.min(ultimo.ancho+6, nivelDe(TORRE_LEVELS, level).anchoInicial);
       torre.push({ x:ultimo.x-(nuevoAncho-ultimo.ancho)/2, ancho:nuevoAncho, y:actual.y, color:actual.color });
       el.querySelector('#oPerf').textContent=perfectos;
       Sonido.play('powerup');
@@ -3635,7 +3763,7 @@ function Torre(el){
     }
 
     apilados++;
-    const cfg=TORRE_LEVELS[level-1];
+    const cfg=nivelDe(TORRE_LEVELS, level);
     el.querySelector('#oMeta').textContent=apilados+'/'+cfg.meta;
 
     if(apilados>=cfg.meta){ levelUp(); return; }
@@ -3648,19 +3776,18 @@ function Torre(el){
     done=true; actual=null;
     awardLevel('torre', level);
     Fiesta.guardarPuntaje('torre', apilados*10 + perfectos*20 + (level-1)*100, level);
+    Fiesta.sumarEstrellas('torre', level, false);   // ⭐ siempre suma
     burst();
     const bn=el.querySelector('#oBanner');
-    if(level<5){
-      Sonido.play('nivel');
-      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
-      const b=document.createElement('button');
-      b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
-      b.onclick=()=>startLevel(level+1);
-      bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else {
-      Sonido.play('victoria');
-      bn.innerHTML=`🏆 ¡Ganaste la Torre! 5 ⭐`;
-    }
+    // ♾️ Los niveles ya no terminan en el 5: siempre hay uno mas.
+    Sonido.play('nivel');
+    const inf = esInfinito(FRUTAS_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button');
+    b.className='btn mt';
+    b.textContent = (inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶';
+    b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
 
   /* ---------- Bucle ---------- */
@@ -3823,7 +3950,7 @@ function Simon(el){
     ronda=0; secuencia=[]; posicion=0; alive=true; done=false;
     encendido=-1; turnoJugador=false; reproduciendo=false; timers=[];
     el.querySelector('#sLvS').textContent='Nivel '+l+'/5';
-    el.querySelector('#sMetaS').textContent='0/'+SIMON_LEVELS[l-1].meta;
+    el.querySelector('#sMetaS').textContent='0/'+nivelDe(SIMON_LEVELS, l).meta;
     el.querySelector('#sBannerS').textContent='';
     if(raf) cancelAnimationFrame(raf);
     raf=requestAnimationFrame(dibujar);
@@ -3838,7 +3965,7 @@ function Simon(el){
     ronda++;
     secuencia.push((Math.random()*4)|0);
     posicion=0;
-    el.querySelector('#sMetaS').textContent=(ronda-1)+'/'+SIMON_LEVELS[level-1].meta;
+    el.querySelector('#sMetaS').textContent=(ronda-1)+'/'+nivelDe(SIMON_LEVELS, level).meta;
     reproducir();
   }
 
@@ -3847,7 +3974,7 @@ function Simon(el){
     el.querySelector('#sEstado').textContent='Mirá…';
     // La secuencia se ACELERA a medida que avanzan las rondas dentro
     // del nivel (nunca baja de un piso, para que siga siendo jugable).
-    const cfg=SIMON_LEVELS[level-1];
+    const cfg=nivelDe(SIMON_LEVELS, level);
     const ritmo=Math.max(cfg.ritmo*0.55, cfg.ritmo-(ronda-1)*11);
     limpiarTimers();
     secuencia.forEach((c,i)=>{
@@ -3890,7 +4017,7 @@ function Simon(el){
       if(posicion>=secuencia.length){
         // Ronda completada
         turnoJugador=false;
-        const cfg=SIMON_LEVELS[level-1];
+        const cfg=nivelDe(SIMON_LEVELS, level);
         el.querySelector('#sMetaS').textContent=Math.min(ronda,cfg.meta)+'/'+cfg.meta;
         el.querySelector('#sEstado').textContent='¡Bien!';
         if(ronda>=cfg.meta){ levelUp(); return; }
@@ -3916,19 +4043,18 @@ function Simon(el){
     done=true; limpiarTimers();
     awardLevel('simon', level);
     Fiesta.guardarPuntaje('simon', ronda*20 + (level-1)*100, level);
+    Fiesta.sumarEstrellas('simon', level, false);   // ⭐ siempre suma
     burst();
     const bn=el.querySelector('#sBannerS');
-    if(level<5){
-      Sonido.play('nivel');
-      bn.innerHTML=`¡Nivel ${level} superado! ⭐`;
-      const b=document.createElement('button');
-      b.className='btn mt'; b.textContent='Nivel '+(level+1)+' ▶';
-      b.onclick=()=>startLevel(level+1);
-      bn.appendChild(document.createElement('br')); bn.appendChild(b);
-    } else {
-      Sonido.play('victoria');
-      bn.innerHTML=`🏆 ¡Ganaste el Simón! 5 ⭐`;
-    }
+    // ♾️ Los niveles ya no terminan en el 5: siempre hay uno mas.
+    Sonido.play('nivel');
+    const inf = esInfinito(FRUTAS_LEVELS, level+1);
+    bn.innerHTML = inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button');
+    b.className='btn mt';
+    b.textContent = (inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶';
+    b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
 
   /* ---------- Dibujo: 4 cuartos de circulo ---------- */
@@ -4013,6 +4139,23 @@ function celebrarRecord(juego, puntos){
   fx._t = setTimeout(function(){ fx.classList.remove('show'); }, 2800);
 }
 window.alSuperarRecord = celebrarRecord;
+
+/* ================================================================
+   AVISO DE ESTRELLAS GANADAS  "+45 ⭐"
+   ----------------------------------------------------------------
+   Lo dispara ranking.js cada vez que el servidor confirma estrellas
+   nuevas. Sube flotando y se va solo.
+   ================================================================ */
+function avisarEstrellas(ganadas, total){
+  if(!ganadas) return;
+  let fx=document.getElementById('estrellasFx');
+  if(!fx){ fx=document.createElement('div'); fx.id='estrellasFx'; document.body.appendChild(fx); }
+  fx.innerHTML='<div class="est-in">+'+ganadas+' ⭐<span class="tot">'+total+' en total</span></div>';
+  fx.classList.remove('show'); void fx.offsetWidth; fx.classList.add('show');
+  clearTimeout(fx._t);
+  fx._t=setTimeout(function(){ fx.classList.remove('show'); }, 2400);
+}
+window.alGanarEstrellas = avisarEstrellas;
 
 
 </script>

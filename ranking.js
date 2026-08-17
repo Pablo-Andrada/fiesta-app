@@ -335,6 +335,52 @@ const Fiesta = (() => {
       } catch { return this._rankingLocal(juego); }
     },
 
+    /* ============================================================
+       ESTRELLAS ⭐ (ranking que nunca baja)
+       ------------------------------------------------------------
+       A diferencia del puntaje (que guarda solo tu MEJOR marca),
+       las estrellas se ACUMULAN: cada nivel superado suma, aunque
+       ya lo hayas pasado antes. Por eso premian jugar seguido y
+       hacen que la app siga viva todo el mes de la fiesta.
+       El SERVIDOR calcula cuantas corresponden, asi nadie puede
+       mandar un numero inventado desde el navegador.
+       ============================================================ */
+    async sumarEstrellas(juego, nivel, conJefe) {
+      if (!estado.online || !estado.token) return null;
+      try {
+        const r = await rpc('sumar_estrellas', {
+          p_token: estado.token,
+          p_juego: juego,
+          p_nivel: nivel,
+          p_jefe:  !!conJefe,
+        });
+        const d = Array.isArray(r) ? r[0] : r;
+        // Avisamos a la interfaz para mostrar el "+45 ⭐" en pantalla
+        if (d && typeof window !== 'undefined' && window.alGanarEstrellas) {
+          try { window.alGanarEstrellas(d.ganadas, d.total); } catch (e) {}
+        }
+        return d;
+      } catch (e) { return null; }
+    },
+
+    /* Ranking de estrellas de la fiesta (viene con los titulos). */
+    async rankingEstrellas() {
+      if (!estado.online || !estado.fiestaId) return [];
+      try {
+        const r = await rpc('ranking_estrellas', { p_fiesta: estado.fiestaId });
+        return Array.isArray(r) ? r : [];
+      } catch (e) { return []; }
+    },
+
+    /* Mis estrellas y mi titulo (para la pantalla de progreso). */
+    async misEstrellas() {
+      if (!estado.online || !estado.token) return null;
+      try {
+        const r = await rpc('mis_estrellas', { p_token: estado.token });
+        return Array.isArray(r) ? r[0] : r;
+      } catch (e) { return null; }
+    },
+
     /* Ranking de emergencia: solo el jugador de este celular. */
     _rankingLocal(juego) {
       const p = local.leer('puntajes', {});
