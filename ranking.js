@@ -388,26 +388,14 @@ const Fiesta = (() => {
     },
 
     /* Mis misiones del dia y de la semana, con su progreso. Las
-       calcula el servidor; si es un dia nuevo, ya vienen en cero. */
+       calcula el servidor; si es un dia nuevo, ya vienen en cero.
+       Las recompensas se acreditan solas al completarlas. */
     async misMisiones() {
       if (!estado.online || !estado.token) return [];
       try {
         const r = await rpc('mis_misiones', { p_token: estado.token });
         return Array.isArray(r) ? r : [];
       } catch (e) { return []; }
-    },
-
-    /* Cobrar la recompensa de una mision cumplida. El servidor
-       verifica que este completa y que no se haya cobrado antes. */
-    async reclamarMision(clave) {
-      if (!estado.online || !estado.token) return null;
-      try {
-        const r = await rpc('reclamar_mision', {
-          p_token: estado.token,
-          p_clave: clave,
-        });
-        return Array.isArray(r) ? r[0] : r;
-      } catch (e) { return null; }
     },
 
     /* Ranking de emergencia: solo el jugador de este celular. */

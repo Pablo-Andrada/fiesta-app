@@ -294,44 +294,36 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
 .t-jugador{ background:var(--lime); color:#0a0416 }
 .t-novato{ background:var(--panel2); color:var(--muted) }
 
-/* ===== PROGRESO: tarjeta de perfil ===== */
-.perfil{ background:linear-gradient(150deg,var(--panel),var(--panel2));
-  border:3px solid var(--yellow); border-radius:18px; padding:18px 16px;
-  text-align:center; box-shadow:0 8px 0 var(--ink) }
-.perfil .ava-grande{ font-size:52px; line-height:1 }
-.perfil .apodo{ font-family:"Baloo 2"; font-weight:800; font-size:20px; margin-top:4px }
-.perfil .est-num{ font-family:"Bangers",cursive; font-size:44px; color:var(--yellow);
-  text-shadow:2px 2px 0 var(--ink); letter-spacing:1px; margin-top:6px }
-.perfil .est-cap{ font-size:12px; color:var(--muted); margin-top:-4px }
-/* barra hacia el proximo titulo */
-.barra-tit{ margin-top:14px; text-align:left }
-.barra-tit .lbl{ font-size:12px; color:var(--muted); font-weight:700; margin-bottom:5px;
-  display:flex; justify-content:space-between; gap:8px }
-.barra-out{ background:var(--panel2); border:2px solid var(--ink); border-radius:999px;
-  height:16px; overflow:hidden }
-.barra-in{ height:100%; border-radius:999px; transition:width .5s ease;
-  background:linear-gradient(90deg,var(--cyan),var(--yellow)) }
-
-/* ===== PROGRESO: misiones ===== */
-.mis-grupo{ font-family:"Bangers",cursive; letter-spacing:1px; color:var(--cyan);
-  font-size:20px; margin:20px 0 10px; display:flex; align-items:center; gap:6px }
-.mis-card{ display:flex; align-items:center; gap:12px; background:var(--panel);
-  border:2px solid var(--panel2); border-radius:14px; padding:11px 13px; margin-bottom:10px }
-.mis-card.ok{ border-color:var(--lime) }
-.mis-ico{ font-size:26px; flex:0 0 auto }
-.mis-cuerpo{ flex:1; min-width:0 }
-.mis-titulo{ font-weight:800; font-size:14px }
-.mis-out{ background:var(--panel2); border-radius:999px; height:9px; overflow:hidden; margin-top:6px }
-.mis-in{ height:100%; border-radius:999px; background:linear-gradient(90deg,var(--violet),var(--magenta));
-  transition:width .5s ease }
-.mis-in.full{ background:linear-gradient(90deg,var(--lime),var(--cyan)) }
-.mis-sub{ font-size:11px; color:var(--muted); margin-top:4px; font-weight:600 }
-.mis-accion{ flex:0 0 auto }
-.mis-btn{ border:2px solid var(--ink); border-radius:999px; padding:7px 12px; font-weight:800;
-  font-size:12px; cursor:pointer; background:var(--yellow); color:#0a0416; white-space:nowrap }
-.mis-btn:disabled{ opacity:.55; cursor:default }
-.mis-premio{ font-size:12px; font-weight:800; color:var(--yellow); white-space:nowrap }
-.mis-listo{ font-size:12px; font-weight:800; color:var(--lime); white-space:nowrap }
+/* ===== PROGRESO (perfil + misiones) — estilo de la maqueta ===== */
+#tab-progreso .sec-sub{ text-align:center; color:var(--muted); font-size:13px; margin:0 0 14px; font-weight:600 }
+#tab-progreso .card{ background:linear-gradient(150deg,var(--panel),var(--panel2)); border:3px solid var(--ink);
+  border-radius:18px; padding:16px; margin-bottom:14px; box-shadow:4px 4px 0 rgba(10,4,22,.5) }
+#tab-progreso .card h3{ font-family:"Bangers",cursive; font-size:20px; margin:0 0 10px; color:var(--cyan); letter-spacing:1px }
+/* --- perfil --- */
+#tab-progreso .perfil-top{ text-align:center; margin-bottom:12px }
+#tab-progreso .perfil-ava{ font-size:54px }
+#tab-progreso .perfil-nom{ font-family:"Bangers",cursive; font-size:26px; letter-spacing:1px }
+#tab-progreso .perfil-tit{ display:inline-block; font-size:13px; font-weight:800; padding:4px 14px;
+  border-radius:999px; border:3px solid var(--ink); margin-top:4px }
+#tab-progreso .estrellas-big{ font-family:"Bangers",cursive; font-size:40px; color:var(--yellow);
+  text-shadow:0 0 16px rgba(255,225,77,.6),2px 2px 0 var(--ink); margin-top:8px }
+#tab-progreso .pbarra{ height:14px; background:rgba(10,4,22,.6); border:3px solid var(--ink);
+  border-radius:999px; overflow:hidden; margin:8px 0 4px }
+#tab-progreso .pbarra i{ display:block; height:100%; background:linear-gradient(90deg,var(--cyan),var(--lime)); transition:width .5s ease }
+#tab-progreso .pdet{ font-size:11px; color:var(--muted); font-weight:600 }
+/* --- misiones (filas dentro de una tarjeta) --- */
+#tab-progreso .mision{ display:flex; align-items:center; gap:10px; padding:10px 0;
+  border-bottom:2px dashed rgba(201,169,232,.25) }
+#tab-progreso .mision:last-child{ border-bottom:none }
+#tab-progreso .mision .ic{ font-size:24px }
+#tab-progreso .mision .txt{ flex:1; min-width:0 }
+#tab-progreso .mision .nom{ font-weight:800; font-size:14px }
+#tab-progreso .mision .prog{ font-size:11px; color:var(--muted); font-weight:600 }
+#tab-progreso .mision .rec{ font-weight:800; color:var(--yellow); font-size:13px; white-space:nowrap }
+#tab-progreso .mision.hecha .nom{ color:var(--lime); text-decoration:line-through; opacity:.7 }
+#tab-progreso .mbar{ height:8px; background:rgba(10,4,22,.6); border-radius:999px; overflow:hidden; margin-top:4px }
+#tab-progreso .mbar i{ display:block; height:100%; background:var(--cyan); transition:width .5s ease }
+#tab-progreso .mbar i.full{ background:var(--lime) }
 
 /* aviso flotante "¡Misión cumplida!" */
 #misionFx{ position:fixed; left:0; right:0; top:150px; z-index:190; display:flex;
@@ -560,7 +552,8 @@ body::before{ content:""; position:fixed; inset:0; z-index:0; pointer-events:non
   <!-- ⭐ PROGRESO: perfil (estrellas + titulo) y misiones diarias/semanal.
        El contenido lo pinta cargarProgreso() con datos del servidor. -->
   <section class="tab" id="tab-progreso">
-    <h2 class="sec-title" style="color:var(--yellow);text-shadow:2px 2px 0 var(--ink),0 0 18px rgba(255,225,77,.55)">⭐ MI PROGRESO</h2>
+    <h2 class="sec-title" style="color:var(--cyan);text-shadow:2px 2px 0 var(--ink),0 0 18px rgba(38,232,255,.55)">⭐ MI PROGRESO</h2>
+    <p class="sec-sub">Tu perfil y tus misiones</p>
     <div id="perfilBox"><div class="vacio">Cargando…</div></div>
     <div id="misionesBox"></div>
   </section>
@@ -888,41 +881,63 @@ const ESCALA_TITULOS=[
   {clave:'leyenda', desde:8000},
 ];
 
-/* Devuelve el HTML de la barra hacia el proximo titulo */
-function barraProximoTitulo(total){
-  // Buscamos en que escalon esta y cual es el siguiente
+/* Bloque del perfil: avatar, nombre, titulo, estrellas grandes y la
+   barra "te faltan X para el proximo titulo" (como en la maqueta). */
+function bloquePerfil(yo){
+  const total=yo.total||0;
+  const tit=TITULOS[yo.titulo]||TITULOS.novato;
+  // ubicamos el escalon actual y el proximo
   let i=0;
   for(let k=0;k<ESCALA_TITULOS.length;k++){ if(total>=ESCALA_TITULOS[k].desde) i=k; }
   const actual=ESCALA_TITULOS[i], prox=ESCALA_TITULOS[i+1];
-  if(!prox){   // Ya es LEYENDA (el titulo mas alto): barra llena
-    return `<div class="barra-tit">
-      <div class="lbl"><span>👑 ¡Título máximo alcanzado!</span><span>${total} ⭐</span></div>
-      <div class="barra-out"><div class="barra-in" style="width:100%"></div></div></div>`;
+  let barra;
+  if(!prox){   // Ya es LEYENDA (el titulo mas alto)
+    barra=`<div class="pdet" style="text-align:center">👑 ¡Sos <b style="color:var(--yellow)">LEYENDA</b>, el título máximo!</div>
+      <div class="pbarra"><i style="width:100%"></i></div>`;
+  }else{
+    const falta=prox.desde-total;
+    const pct=Math.max(2,Math.min(100,Math.round((total-actual.desde)/(prox.desde-actual.desde)*100)));
+    barra=`<div class="pdet" style="text-align:center">Te faltan <b style="color:var(--cyan)">${falta} ⭐</b> para ser ${TITULOS[prox.clave]}</div>
+      <div class="pbarra"><i style="width:${pct}%"></i></div>
+      <div class="pdet" style="display:flex;justify-content:space-between"><span>${tit}</span><span>${TITULOS[prox.clave]}</span></div>`;
   }
-  const falta=prox.desde-total;
-  const pct=Math.max(0,Math.min(100,Math.round((total-actual.desde)/(prox.desde-actual.desde)*100)));
-  const nombreProx=TITULOS[prox.clave]||prox.clave;
-  return `<div class="barra-tit">
-    <div class="lbl"><span>Te faltan ${falta} para ${nombreProx}</span><span>${pct}%</span></div>
-    <div class="barra-out"><div class="barra-in" style="width:${pct}%"></div></div></div>`;
+  return `<div class="card">
+    <div class="perfil-top">
+      <div class="perfil-ava">${escapar(Fiesta.estado.avatar||'🙂')}</div>
+      <div class="perfil-nom">${escapar(Fiesta.estado.apodo||'Vos')}</div>
+      <div><span class="perfil-tit t-${yo.titulo}">${tit}</span></div>
+      <div class="estrellas-big">${total} ⭐</div>
+    </div>
+    ${barra}
+  </div>`;
 }
 
-/* HTML de una tarjeta de mision */
+/* Una fila de mision. Al completarla queda tachada con ✅ y la
+   recompensa ya se acredito sola (no hay boton). */
 function tarjetaMision(m){
   const pct=Math.min(100,Math.round(m.progreso/m.meta*100));
-  let accion;
-  if(m.reclamada)       accion='<span class="mis-listo">✓ Listo</span>';
-  else if(m.completada) accion=`<button class="mis-btn" data-mis="${m.clave}">Reclamar +${m.premio}⭐</button>`;
-  else                  accion=`<span class="mis-premio">+${m.premio}⭐</span>`;
-  return `<div class="mis-card ${m.completada?'ok':''}">
-    <div class="mis-ico">${m.icono}</div>
-    <div class="mis-cuerpo">
-      <div class="mis-titulo">${escapar(m.titulo)}</div>
-      <div class="mis-out"><div class="mis-in ${m.completada?'full':''}" style="width:${pct}%"></div></div>
-      <div class="mis-sub">${m.progreso} / ${m.meta}</div>
+  const ico  = m.completada ? '✅' : m.icono;
+  const prog = m.completada ? (m.meta+' / '+m.meta+' · ¡Completada!') : (m.progreso+' / '+m.meta);
+  return `<div class="mision ${m.completada?'hecha':''}">
+    <div class="ic">${ico}</div>
+    <div class="txt">
+      <div class="nom">${escapar(m.titulo)}</div>
+      <div class="prog">${prog}</div>
+      <div class="mbar"><i class="${m.completada?'full':''}" style="width:${pct}%"></i></div>
     </div>
-    <div class="mis-accion">${accion}</div>
+    <div class="rec">+${m.premio} ⭐</div>
   </div>`;
+}
+
+/* Texto "Misiones nuevas en X h Y min" (hasta la medianoche de Cordoba) */
+function contadorMisiones(){
+  const ahora=new Date();
+  // pasamos a hora de Argentina (UTC-3, sin horario de verano)
+  const arg=new Date(ahora.getTime()+ahora.getTimezoneOffset()*60000-3*3600000);
+  const fin=new Date(arg); fin.setHours(24,0,0,0);
+  const ms=fin-arg;
+  const h=Math.floor(ms/3600000), min=Math.floor((ms%3600000)/60000);
+  return '🕐 Misiones nuevas en '+h+' h '+min+' min';
 }
 
 /* Carga y pinta la pestaña Progreso (perfil + misiones) */
@@ -935,38 +950,23 @@ async function cargarProgreso(){
   if(!yo){ pb.innerHTML='<div class="vacio">Entrá a una fiesta para ver tu progreso ⭐</div>'; return; }
 
   // --- Perfil ---
-  const total=yo.total||0;
-  const tit=TITULOS[yo.titulo]||TITULOS.novato;
-  pb.innerHTML=`<div class="perfil">
-    <div class="ava-grande">${escapar(Fiesta.estado.avatar||'🙂')}</div>
-    <div class="apodo">${escapar(Fiesta.estado.apodo||'Vos')}</div>
-    <div class="est-num">${total} ⭐</div>
-    <div class="est-cap">estrellas acumuladas</div>
-    <div style="margin-top:8px"><span class="titulo t-${yo.titulo}">${tit}</span></div>
-    ${barraProximoTitulo(total)}
-  </div>`;
+  pb.innerHTML=bloquePerfil(yo);
 
-  // --- Misiones ---
+  // --- Misiones (todas dentro de una tarjeta, como la maqueta) ---
   const diarias=misiones.filter(m=>m.periodo==='diaria');
   const semanal=misiones.filter(m=>m.periodo==='semanal');
   let html='';
-  if(diarias.length){ html+='<div class="mis-grupo">🗓️ Misiones de hoy</div>'+diarias.map(tarjetaMision).join(''); }
-  if(semanal.length){ html+='<div class="mis-grupo">🏅 Misión de la semana</div>'+semanal.map(tarjetaMision).join(''); }
+  if(diarias.length){
+    html+='<div class="card"><h3>🎯 Misiones de hoy</h3>'+
+      diarias.map(tarjetaMision).join('')+
+      '<div class="pdet" style="margin-top:10px;text-align:center">'+contadorMisiones()+'</div></div>';
+  }
+  if(semanal.length){
+    html+='<div class="card"><h3>📅 Misión de la semana</h3>'+
+      semanal.map(tarjetaMision).join('')+'</div>';
+  }
   if(!html) html='<div class="vacio">Todavía no hay misiones. ¡Volvé mañana! 🗓️</div>';
   mb.innerHTML=html;
-
-  // Enganchamos los botones "Reclamar"
-  mb.querySelectorAll('button[data-mis]').forEach(b=>{
-    b.onclick=()=>reclamarMisionUI(b.dataset.mis, b);
-  });
-}
-
-/* Reclamar la recompensa de una mision cumplida */
-async function reclamarMisionUI(clave, btn){
-  if(btn){ btn.disabled=true; btn.textContent='…'; }
-  const r=await Fiesta.reclamarMision(clave);
-  if(r && r.ok){ try{ avisarEstrellas(r.premio, r.total); }catch(e){} }  // cartel de estrellas
-  cargarProgreso();                                   // refrescamos con el estado real
 }
 
 /* Aviso flotante cuando se CUMPLE una mision jugando */
