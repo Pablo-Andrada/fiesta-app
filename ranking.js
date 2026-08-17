@@ -359,6 +359,12 @@ const Fiesta = (() => {
         if (d && typeof window !== 'undefined' && window.alGanarEstrellas) {
           try { window.alGanarEstrellas(d.ganadas, d.total); } catch (e) {}
         }
+        // Si con esta partida se cumplio alguna mision, tambien avisamos
+        // (el servidor nos devuelve la lista de las recien cumplidas).
+        if (d && d.misiones && d.misiones.length &&
+            typeof window !== 'undefined' && window.alCumplirMision) {
+          try { window.alCumplirMision(d.misiones); } catch (e) {}
+        }
         return d;
       } catch (e) { return null; }
     },
@@ -377,6 +383,29 @@ const Fiesta = (() => {
       if (!estado.online || !estado.token) return null;
       try {
         const r = await rpc('mis_estrellas', { p_token: estado.token });
+        return Array.isArray(r) ? r[0] : r;
+      } catch (e) { return null; }
+    },
+
+    /* Mis misiones del dia y de la semana, con su progreso. Las
+       calcula el servidor; si es un dia nuevo, ya vienen en cero. */
+    async misMisiones() {
+      if (!estado.online || !estado.token) return [];
+      try {
+        const r = await rpc('mis_misiones', { p_token: estado.token });
+        return Array.isArray(r) ? r : [];
+      } catch (e) { return []; }
+    },
+
+    /* Cobrar la recompensa de una mision cumplida. El servidor
+       verifica que este completa y que no se haya cobrado antes. */
+    async reclamarMision(clave) {
+      if (!estado.online || !estado.token) return null;
+      try {
+        const r = await rpc('reclamar_mision', {
+          p_token: estado.token,
+          p_clave: clave,
+        });
         return Array.isArray(r) ? r[0] : r;
       } catch (e) { return null; }
     },
