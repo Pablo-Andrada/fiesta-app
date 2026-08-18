@@ -3751,10 +3751,12 @@ function Ritmo(el){
     brillos[col]=200;
 
     // Buscamos la ficha de esa columna mas cerca de la linea
+    // (usamos el alto REAL de cada ficha: las largas son mas altas
+    // que las normales, y con ALTO_FICHA fijo el calculo quedaba mal)
     let mejor=null, mejorDist=Infinity;
     fichas.forEach(f=>{
       if(f.col!==col || f.tocada) return;
-      const centro=f.y+ALTO_FICHA/2;
+      const centro=f.y+f.alto/2;
       const dist=Math.abs(centro-LINEA);
       if(dist<mejorDist){ mejorDist=dist; mejor=f; }
     });
@@ -3817,18 +3819,28 @@ function Ritmo(el){
       for(let i=fichas.length-1;i>=0;i--){
         const f=fichas[i];
         f.y += cfg.velocidad*paso;
-        // 🎵 Nota larga ya tocada: mientras su cuerpo cruza la linea,
-        // si el dedo sigue abajo en esa columna, suma "sostenida".
-        if(f.larga && f.tocada && !f.bonusDado){
+        // 🎵 Nota larga: mientras cualquier parte de su cuerpo esta
+        // cerca de la linea, si el dedo esta abajo en esa columna suma
+        // "sostenida". YA NO depende de un toque puntual justo cuando
+        // llega: si el chico mantiene el dedo apretado desde ANTES de
+        // que la ficha aparezca en la zona (lo mas natural al jugar
+        // "mantené presionado"), se detecta igual apenas entra.
+        if(f.larga && !f.bonusDado){
           const cabeza=f.y, cola=f.y+f.alto;
-          if(cabeza<LINEA+18 && cola>LINEA-18){
+          const enZona = cabeza<LINEA+34 && cola>LINEA-34;
+          if(enZona){
             f.sosteniendoTotal++;
-            if(dedoAbajo[f.col]) f.sostenida++;
+            if(dedoAbajo[f.col]){
+              f.sostenida++;
+              if(!f.tocada){ f.tocada=true; brillos[f.col]=200; Sonido.play('tap'); }
+            }
           }
-          if(cola>LINEA+18){
+          if(cola>LINEA+34){
             // Termino de pasar: si la sostuvo la mayor parte, bonus.
             f.bonusDado=true;
-            if(f.sosteniendoTotal>0 && f.sostenida/f.sosteniendoTotal>0.6){
+            const ratio = f.sosteniendoTotal>0 ? f.sostenida/f.sosteniendoTotal : 0;
+            if(ratio>0.45){
+              f.tocada=true;   // por las dudas: nunca pierde vida si sostuvo bien
               acertadas+=3; racha++; if(racha>mejorRacha) mejorRacha=racha;
               Sonido.play('powerup');
               avisos.push({ texto:'¡SOSTENIDA! +3', color:'#26e8ff', x:f.col*ANCHO_COL+ANCHO_COL/2, y:LINEA-20, vida:600 });
