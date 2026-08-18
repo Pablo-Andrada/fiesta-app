@@ -3765,6 +3765,7 @@ function Ritmo(el){
     if(!mejor || mejorDist>70){ Sonido.play('tap'); return; }
 
     mejor.tocada=true;
+    if(!mejor.larga) mejor.flashT=160;   // destello breve de "acierto" antes de desaparecer
     let texto, color, suma;
     if(mejorDist<16)      { texto='¡PERFECTO!'; color='#ffe14d'; suma=3; }
     else if(mejorDist<36) { texto='¡BIEN!';     color='#8cff5a'; suma=2; }
@@ -3819,6 +3820,7 @@ function Ritmo(el){
       for(let i=fichas.length-1;i>=0;i--){
         const f=fichas[i];
         f.y += cfg.velocidad*paso;
+        if(f.flashT>0) f.flashT=Math.max(0,f.flashT-dt);   // destello de acierto (fichas cortas)
         // 🎵 Nota larga: mientras cualquier parte de su cuerpo esta
         // cerca de la linea, si el dedo esta abajo en esa columna suma
         // "sostenida". YA NO depende de un toque puntual justo cuando
@@ -3930,13 +3932,25 @@ function Ritmo(el){
 
     // Fichas
     fichas.forEach(f=>{
-      if(f.tocada && !f.larga) return;      // las normales desaparecen al tocarlas
-      if(f.tocada && f.larga && f.bonusDado) return;  // la larga ya termino su recorrido
+      if(f.tocada && !f.larga && !(f.flashT>0)) return;   // ya paso el flash de acierto, se esconde
+      if(f.tocada && f.larga && f.bonusDado) return;       // la larga ya termino su recorrido
       const x=f.col*ANCHO_COL+5;
       const col=COLUMNAS[f.col];
+      // Mientras el dedo la esta presionando correctamente (larga sosteniendose,
+      // o corta recien acertada) resaltamos el color: mas clara + brillo/glow.
+      const presionando = (f.larga && f.tocada && !f.bonusDado && dedoAbajo[f.col])
+                        || (!f.larga && f.tocada && f.flashT>0);
+      ctx.save();
+      if(presionando){ ctx.shadowColor='#ffffff'; ctx.shadowBlur=16; }
       ctx.fillStyle = f.larga ? '#26e8ff' : col.color;
       rr(ctx, x, f.y, ANCHO_COL-10, f.alto, 8); ctx.fill();
-      ctx.strokeStyle='#0a0416'; ctx.lineWidth=3; ctx.stroke();
+      if(presionando){
+        ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(255,255,255,.5)';
+        rr(ctx, x, f.y, ANCHO_COL-10, f.alto, 8); ctx.fill();
+      }
+      ctx.restore();
+      ctx.strokeStyle= presionando ? '#ffffff' : '#0a0416'; ctx.lineWidth= presionando ? 4 : 3; ctx.stroke();
       // Brillito arriba de la ficha
       ctx.fillStyle='rgba(255,255,255,.35)';
       rr(ctx, x+6, f.y+5, ANCHO_COL-22, 8, 4); ctx.fill();
