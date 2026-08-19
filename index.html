@@ -604,6 +604,10 @@ const JUEGOS=[
   { id:'ritmo',    nombre:'Ritmo',    icono:'🎹', fn:()=>Ritmo },
   { id:'torre',    nombre:'Torre',    icono:'🥞', fn:()=>Torre },
   { id:'simon',    nombre:'Simón',    icono:'🧠', fn:()=>Simon },
+  { id:'dragon',   nombre:'Dragón',   icono:'🐉', fn:()=>DragonVolador },
+  { id:'tiro',     nombre:'Tiro Láser',icono:'🎯', fn:()=>TiroBlanco },
+  { id:'submarino',nombre:'Submarino',icono:'🫧', fn:()=>Submarino },
+  { id:'magos',    nombre:'Magos',    icono:'🔮', fn:()=>DueloMagos },
 ];
 
 const AVATARES=['🦁','🐯','🐸','🐼','🦊','🐵','🦄','🐲','🤖','👽','🦖','🐙','🦈','🐝','🦉','🐨','🍕','⚡'];
@@ -4471,6 +4475,709 @@ function Simon(el){
 
   startLevel(1);
   cleanup=()=>{ if(raf) cancelAnimationFrame(raf); limpiarTimers(); };
+}
+
+
+/* ================================================================
+   JUEGOS NUEVOS (primera versión) — Dragón Volador y Tiro al Blanco
+   Se integran igual que el resto: función Juego(el), tabla de 5
+   niveles + nivelDe(), Fiesta.guardarPuntaje/sumarEstrellas, y
+   se registran arriba en el arreglo JUEGOS.
+   ================================================================ */
+/* ============================================================
+   DRAGÓN VOLADOR · estilo Flappy Bird con dragón · 5 niveles
+   Tocás (o barra espaciadora) para aletear y subir; si no,
+   cae por gravedad. Hay que pasar entre los cristales por el
+   hueco y juntar monedas. Chocar un cristal o el piso = perder.
+   ============================================================ */
+const DRAGON_LEVELS=[
+  { meta:5,  hueco:135, sep:210, vel:1.7, monedas:0.5 },
+  { meta:7,  hueco:125, sep:195, vel:2.0, monedas:0.5 },
+  { meta:9,  hueco:116, sep:180, vel:2.3, monedas:0.55 },
+  { meta:11, hueco:108, sep:168, vel:2.6, monedas:0.6 },
+  { meta:13, hueco:100, sep:156, vel:3.0, monedas:0.6 },
+];
+
+function DragonVolador(el){
+  el.innerHTML=`<h2>🐉 Dragón Volador</h2>
+    <p class="lead">Tocá la pantalla para aletear y subir. Pasá entre los cristales y juntá monedas 🪙.</p>
+    <div class="hud"><span class="lv" id="dvLv"></span><span>Cuevas: <span class="stat" id="dvMeta">0</span></span><span>🪙 <span class="stat" id="dvCoins">0</span></span></div>
+    <canvas id="dvCanvas" width="300" height="380"></canvas>
+    <div class="banner" id="dvBanner"></div>`;
+  const cv=el.querySelector('#dvCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  const G=0.42, FLAP=-6.4, SUELO=H-16;
+
+  let level,cfg,dragon,tubos,monedas,pasados,coins,alive,done,raf,tick;
+
+  function startLevel(l){
+    level=l; cfg=nivelDe(DRAGON_LEVELS,l);
+    dragon={ x:78, y:H/2, vy:0, rot:0 };
+    tubos=[]; monedas=[]; pasados=0; coins=0; alive=true; done=false; tick=0;
+    // primer cristal bien adelante para dar tiempo
+    let x=W+40;
+    for(let i=0;i<4;i++){ agregarTubo(x); x+=cfg.sep; }
+    el.querySelector('#dvLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#dvMeta').textContent='0/'+cfg.meta;
+    el.querySelector('#dvCoins').textContent='0';
+    el.querySelector('#dvBanner').textContent='';
+    if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
+  }
+  function agregarTubo(x){
+    const margen=54;
+    const centro=margen+cfg.hueco/2 + Math.random()*(H-2*margen-cfg.hueco);
+    tubos.push({ x, centro, pasado:false, color: Math.random()<0.5?['214,46,154','255,140,200']:['38,180,232','150,240,255'] });
+    if(Math.random()<cfg.monedas) monedas.push({ x:x+cfg.sep/2, y:centro, tomada:false });
+  }
+  function aletear(){ if(!alive||done)return; dragon.vy=FLAP; Sonido.play('tap'); }
+
+  function frame(){
+    if(!alive){ draw(); return; }
+    tick++;
+    dragon.vy+=G; dragon.y+=dragon.vy;
+    dragon.rot=Math.max(-0.5, Math.min(1.1, dragon.vy*0.09));
+    // techo y piso
+    if(dragon.y<12){ dragon.y=12; dragon.vy=0; }
+    if(dragon.y>SUELO-14){ return perder(); }
+    // mover tubos
+    let ultimoX=0;
+    tubos.forEach(t=>{ t.x-=cfg.vel; if(t.x>ultimoX)ultimoX=t.x; });
+    monedas.forEach(m=>{ m.x-=cfg.vel; });
+    // reciclar / agregar
+    tubos=tubos.filter(t=>t.x>-40);
+    monedas=monedas.filter(m=>m.x>-20 && !m.tomada);
+    while(tubos.length<4){ agregarTubo(ultimoX+cfg.sep); ultimoX+=cfg.sep; }
+    // colisiones y conteo
+    tubos.forEach(t=>{
+      const dx=Math.abs(dragon.x-t.x);
+      if(dx<20){
+        const top=t.centro-cfg.hueco/2, bot=t.centro+cfg.hueco/2;
+        if(dragon.y-11<top || dragon.y+11>bot){ return perder(); }
+      }
+      if(!t.pasado && t.x<dragon.x-20){ t.pasado=true; pasados++; Sonido.play('acierto');
+        el.querySelector('#dvMeta').textContent=Math.min(pasados,cfg.meta)+'/'+cfg.meta;
+        if(pasados>=cfg.meta){ return levelUp(); } }
+    });
+    // monedas
+    monedas.forEach(m=>{ if(!m.tomada && Math.hypot(dragon.x-m.x,dragon.y-m.y)<20){ m.tomada=true; coins++; Sonido.play('comer'); el.querySelector('#dvCoins').textContent=coins; } });
+    draw();
+    if(alive && !done) raf=requestAnimationFrame(frame);
+  }
+
+  function perder(){
+    if(!alive) return; alive=false; Sonido.play('gameover'); Sonido.vibrar(120);
+    draw();
+    const bn=el.querySelector('#dvBanner');
+    bn.innerHTML=`<span style="color:var(--magenta)">¡Chocaste! 🐉💥</span>`;
+    const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel';
+    b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+  function levelUp(){
+    done=true; Sonido.play('nivel'); awardLevel('dragon', level);
+    Fiesta.guardarPuntaje('dragon', pasados*20 + coins*5 + (level-1)*100, level);
+    Fiesta.sumarEstrellas('dragon', level, false);
+    burst();
+    const bn=el.querySelector('#dvBanner');
+    const inf=esInfinito(DRAGON_LEVELS, level+1);
+    bn.innerHTML= inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+
+  function draw(){
+    // fondo cueva
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#4a2170'); g.addColorStop(.5,'#2a1246'); g.addColorStop(1,'#0f0620');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // luz volumétrica de fondo
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const lg=ctx.createLinearGradient(W*0.5,0,W*0.3,H); lg.addColorStop(0,'rgba(180,120,255,.14)'); lg.addColorStop(1,'rgba(180,120,255,0)');
+    ctx.fillStyle=lg; ctx.beginPath(); ctx.moveTo(W*0.42,0); ctx.lineTo(W*0.6,0); ctx.lineTo(W*0.32,H); ctx.lineTo(W*0.02,H); ctx.closePath(); ctx.fill(); ctx.restore();
+    // monedas
+    monedas.forEach(m=>{ if(m.tomada)return; glowJ(ctx,m.x,m.y,12,'rgba(255,220,90,.55)',.7);
+      const mg=ctx.createRadialGradient(m.x-2,m.y-3,1,m.x,m.y,8); mg.addColorStop(0,'#fff6c8'); mg.addColorStop(.5,'#ffd23f'); mg.addColorStop(1,'#b9860c');
+      ctx.fillStyle=mg; ctx.beginPath(); ctx.arc(m.x,m.y,8,0,7); ctx.fill(); ctx.strokeStyle='#8a5f08'; ctx.lineWidth=1.4; ctx.stroke();
+      ctx.fillStyle='rgba(184,134,11,.7)'; ctx.font='bold 9px serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('★',m.x,m.y); ctx.textBaseline='alphabetic'; ctx.textAlign='left'; });
+    // cristales (tubos arriba y abajo)
+    tubos.forEach(t=>{
+      const top=t.centro-cfg.hueco/2, bot=t.centro+cfg.hueco/2;
+      dibujarCristal(ctx,t.x,true,top,t.color);
+      dibujarCristal(ctx,t.x,false,H-bot,t.color);
+    });
+    // piso
+    ctx.fillStyle='#1a0d2e'; ctx.fillRect(0,SUELO,W,H-SUELO);
+    ctx.fillStyle='rgba(180,120,255,.25)'; ctx.fillRect(0,SUELO,W,3);
+    // dragón (usa el dibujarDragon global, ver más abajo)
+    ctx.save(); ctx.translate(dragon.x,dragon.y); ctx.rotate(dragon.rot);
+    const flap=Math.sin(tick*0.4)*0.14;
+    dibujarDragonMini(ctx, flap);
+    ctx.restore();
+  }
+  function dibujarCristal(ctx,x,arriba,alto,rgbPair){
+    const [rgb,rgb2]=rgbPair; const y0=arriba?0:H, y1=arriba?alto:H-alto; const w=22;
+    glowJ(ctx,x,y1,20,'rgba('+rgb+',.5)',.5);
+    const cg=ctx.createLinearGradient(x,y0,x,y1); cg.addColorStop(0,'rgb('+rgb2+')'); cg.addColorStop(1,'rgb('+rgb+')');
+    ctx.fillStyle=cg; ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x-w,y0); ctx.lineTo(x+w,y0); ctx.lineTo(x+7,y1); ctx.lineTo(x-7,y1); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.beginPath(); ctx.moveTo(x-7,y0+6); ctx.lineTo(x,y1-6); ctx.stroke();
+  }
+
+  function pos(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) }; }
+  cv.addEventListener('pointerdown',e=>{ e.preventDefault(); aletear(); });
+  function key(e){ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); aletear(); } }
+  document.addEventListener('keydown',key);
+  startLevel(1);
+  cleanup=()=>{ if(raf) cancelAnimationFrame(raf); document.removeEventListener('keydown',key); };
+}
+
+/* Helper glow local (para no depender de nada externo) */
+function glowJ(ctx,x,y,r,color,alpha){ ctx.save(); ctx.globalCompositeOperation='lighter'; const g=ctx.createRadialGradient(x,y,0,x,y,r); g.addColorStop(0,color); g.addColorStop(1,'rgba(0,0,0,0)'); ctx.globalAlpha=alpha==null?1:alpha; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill(); ctx.restore(); }
+
+/* Dragón compacto para el juego (mira a la derecha, centrado en 0,0).
+   flap = desplazamiento del ala para animar el aleteo. */
+function dibujarDragonMini(ctx, flap){
+  const s=0.5; ctx.save(); ctx.scale(s,s);
+  // ala trasera
+  ctx.save(); ctx.globalAlpha=0.85;
+  ctx.fillStyle='#2f7a1e'; ctx.strokeStyle='#1c4a12'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(-6,-6); ctx.quadraticCurveTo(-40,-40+flap*40,-56,-24+flap*30); ctx.quadraticCurveTo(-34,-18,-40,0); ctx.quadraticCurveTo(-22,-6,-6,-6); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+  // cola con púas
+  ctx.strokeStyle='#2f7a1e'; ctx.lineWidth=12; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-14,3); ctx.quadraticCurveTo(-44,16,-62,2); ctx.stroke();
+  ctx.strokeStyle='#4a9e37'; ctx.lineWidth=7; ctx.beginPath(); ctx.moveTo(-14,3); ctx.quadraticCurveTo(-44,16,-62,2); ctx.stroke();
+  ctx.fillStyle='#256b18'; ctx.beginPath(); ctx.moveTo(-62,-4); ctx.lineTo(-74,-8); ctx.lineTo(-64,2); ctx.lineTo(-74,6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#1f5a12'; [[-24,10],[-40,12]].forEach(([x,y])=>{ ctx.beginPath(); ctx.moveTo(x-4,y); ctx.lineTo(x+4,y); ctx.lineTo(x,y+10); ctx.closePath(); ctx.fill(); });
+  // cuerpo con escamas
+  ctx.beginPath(); ctx.moveTo(-20,-5); ctx.quadraticCurveTo(-8,-17,14,-15); ctx.quadraticCurveTo(30,-13,38,-10); ctx.quadraticCurveTo(32,2,18,9); ctx.quadraticCurveTo(0,17,-20,12); ctx.quadraticCurveTo(-27,3,-20,-5); ctx.closePath();
+  const bg=ctx.createLinearGradient(0,-17,0,13); bg.addColorStop(0,'#8ee85a'); bg.addColorStop(.55,'#4a9e37'); bg.addColorStop(1,'#2f7a1e');
+  ctx.save(); ctx.fillStyle=bg; ctx.fill(); ctx.clip();
+  ctx.fillStyle='#f2d98a'; ctx.beginPath(); ctx.ellipse(-4,9,22,10,0,0,Math.PI); ctx.fill();
+  for(let ry=-15;ry<7;ry+=6){ for(let rx=-22;rx<40;rx+=8){ const off=((ry/6)%2)*4; ctx.beginPath(); ctx.arc(rx+off,ry,4.5,Math.PI,0);
+    const sg=ctx.createLinearGradient(rx,ry-4,rx,ry+2); sg.addColorStop(0,'#6ecf42'); sg.addColorStop(1,'#3a8a28'); ctx.fillStyle=sg; ctx.fill(); ctx.strokeStyle='rgba(28,74,18,.5)'; ctx.lineWidth=0.8; ctx.stroke(); } }
+  ctx.restore(); ctx.strokeStyle='#1c4a12'; ctx.lineWidth=2; ctx.stroke();
+  // púas dorsales
+  ctx.fillStyle='#1f5a12'; [[-16,-12],[-6,-16],[6,-16],[18,-14]].forEach(([x,y])=>{ ctx.beginPath(); ctx.moveTo(x-4,y+3); ctx.lineTo(x+4,y+3); ctx.lineTo(x,y-8); ctx.closePath(); ctx.fill(); });
+  // cabeza
+  ctx.beginPath(); ctx.moveTo(30,-10); ctx.quadraticCurveTo(44,-14,52,-22); ctx.quadraticCurveTo(66,-26,80,-20); ctx.lineTo(88,-16); ctx.quadraticCurveTo(84,-8,74,-8); ctx.quadraticCurveTo(60,-4,44,-4); ctx.closePath();
+  const hg=ctx.createLinearGradient(55,-26,55,-4); hg.addColorStop(0,'#8ee85a'); hg.addColorStop(1,'#3a8a28'); ctx.fillStyle=hg; ctx.fill(); ctx.strokeStyle='#1c4a12'; ctx.lineWidth=2; ctx.stroke();
+  // cuernos
+  ctx.strokeStyle='#efe3b8'; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(62,-24); ctx.quadraticCurveTo(64,-38,54,-42); ctx.stroke();
+  // ojo reptil
+  glowJ(ctx,66,-18,8,'rgba(255,200,60,.7)',.7);
+  ctx.fillStyle='#ffcf3a'; ctx.beginPath(); ctx.ellipse(66,-18,5,3.6,0.2,0,7); ctx.fill(); ctx.strokeStyle='#1c4a12'; ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle='#0a1f08'; ctx.beginPath(); ctx.ellipse(67,-18,1.3,3,0.1,0,7); ctx.fill();
+  ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(64.5,-19.5,1,0,7); ctx.fill();
+  // dientes
+  ctx.fillStyle='#fff'; [80,75].forEach(x=>{ ctx.beginPath(); ctx.moveTo(x,-9); ctx.lineTo(x+3,-9); ctx.lineTo(x+1.5,-5); ctx.closePath(); ctx.fill(); });
+  // fuego
+  glowJ(ctx,102,-13,16,'rgba(255,150,40,.85)',.9);
+  const flame=ctx.createRadialGradient(90,-13,1,114,-13,22); flame.addColorStop(0,'#fff2b0'); flame.addColorStop(.45,'#ff8c1a'); flame.addColorStop(1,'rgba(255,50,0,0)');
+  ctx.fillStyle=flame; ctx.beginPath(); ctx.moveTo(88,-17); ctx.quadraticCurveTo(116,-13,88,-9); ctx.quadraticCurveTo(102,-13,88,-17); ctx.fill();
+  // pata
+  ctx.fillStyle='#3f8f2c'; ctx.strokeStyle='#1c4a12'; ctx.lineWidth=1.5; ctx.beginPath(); ctx.ellipse(14,15,7,5,0.2,0,7); ctx.fill(); ctx.stroke();
+  ctx.strokeStyle='#efe3b8'; ctx.lineWidth=2; ctx.lineCap='round'; [-3,1].forEach(dx=>{ ctx.beginPath(); ctx.moveTo(14+dx,19); ctx.lineTo(12+dx,26); ctx.stroke(); });
+  // ala delantera (animada con flap)
+  ctx.fillStyle='#7ce048'; ctx.globalAlpha=0.92; ctx.strokeStyle='#256b18'; ctx.lineWidth=2;
+  const wy=-70+flap*46;
+  ctx.beginPath(); ctx.moveTo(4,-8); ctx.quadraticCurveTo(-4,-52,8,wy); ctx.quadraticCurveTo(12,-44+flap*30,24,-52+flap*34); ctx.quadraticCurveTo(20,-30,30,-28); ctx.quadraticCurveTo(18,-14,8,-4); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+/* ============================================================
+   TIRO AL BLANCO GALÁCTICO · puntería · 5 niveles
+   Mantené apretado para CARGAR energía (barra), soltá para
+   disparar un rayo láser. El blanco se mueve. Pegale cerca del
+   centro para más puntos. Tenés tiros limitados por nivel:
+   si no llegás a la meta de puntos, perdés.
+   ============================================================ */
+const TIRO_LEVELS=[
+  { meta:100, tiros:5, velBlanco:0.8, radio:44 },
+  { meta:140, tiros:5, velBlanco:1.3, radio:40 },
+  { meta:180, tiros:5, velBlanco:1.8, radio:36 },
+  { meta:220, tiros:6, velBlanco:2.3, radio:32 },
+  { meta:260, tiros:6, velBlanco:2.9, radio:28 },
+];
+
+function TiroBlanco(el){
+  el.innerHTML=`<h2>🎯 Tiro al Blanco Galáctico</h2>
+    <p class="lead">Mantené apretado el cañón para cargar energía ⚡ y soltá para disparar el rayo.</p>
+    <div class="hud"><span class="lv" id="tbLv"></span><span>Pts: <span class="stat" id="tbPts">0</span></span><span>🔫 <span class="stat" id="tbTiros">0</span></span></div>
+    <canvas id="tbCanvas" width="300" height="380"></canvas>
+    <div class="banner" id="tbBanner"></div>`;
+  const cv=el.querySelector('#tbCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  const canonX=48, canonY=H-46;
+
+  let level,cfg,pts,tirosRestantes,blanco,cargando,carga,rayo,alive,done,raf,stars;
+
+  function startLevel(l){
+    level=l; cfg=nivelDe(TIRO_LEVELS,l);
+    pts=0; tirosRestantes=cfg.tiros; cargando=false; carga=0; rayo=null; alive=true; done=false;
+    blanco={ x:W*0.62, y:90, dx:cfg.velBlanco, dy:cfg.velBlanco*0.7, r:cfg.radio };
+    stars=Array.from({length:40},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.4+0.4,a:0.3+Math.random()*0.6}));
+    el.querySelector('#tbLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#tbPts').textContent='0/'+cfg.meta;
+    el.querySelector('#tbTiros').textContent=tirosRestantes;
+    el.querySelector('#tbBanner').textContent='';
+    if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
+  }
+
+  function frame(){
+    // mover blanco (rebota en los bordes de la zona superior)
+    if(alive && !rayo){
+      blanco.x+=blanco.dx; blanco.y+=blanco.dy;
+      if(blanco.x<blanco.r+8||blanco.x>W-blanco.r-8) blanco.dx*=-1;
+      if(blanco.y<blanco.r+8||blanco.y>H*0.55) blanco.dy*=-1;
+    }
+    if(cargando && carga<1) carga=Math.min(1, carga+0.02);
+    // animar rayo
+    if(rayo){ rayo.t+=0.08; if(rayo.t>=1){ resolverImpacto(); rayo=null; } }
+    draw();
+    raf=requestAnimationFrame(frame);
+  }
+
+  function disparar(){
+    if(!alive||done||rayo||tirosRestantes<=0) return;
+    const potencia=carga; cargando=false; carga=0;
+    // el rayo apunta a donde está el blanco AHORA (congela objetivo)
+    rayo={ tx:blanco.x, ty:blanco.y, t:0, potencia, bx:blanco.x, by:blanco.y };
+    tirosRestantes--;
+    el.querySelector('#tbTiros').textContent=tirosRestantes;
+    Sonido.play('disparo');
+  }
+  function resolverImpacto(){
+    const dist=Math.hypot(rayo.tx-rayo.bx, rayo.ty-rayo.by); // 0 si el blanco no se movió (está congelado)
+    // puntaje según qué tan al centro y la potencia (mín 0.5 para no penalizar tanto)
+    const centro=1; // apuntamos al centro exacto
+    let base;
+    // el "acierto" depende de la potencia: muy poca o de más, falla el centro
+    const idealDist=Math.abs(rayo.potencia-0.75); // potencia ideal ~0.75
+    if(idealDist<0.12) base=30;      // centro
+    else if(idealDist<0.25) base=20;
+    else if(idealDist<0.4) base=10;
+    else base=5;
+    pts+=base;
+    Sonido.play(base>=20?'powerup':'acierto');
+    burst(base>=20?60:30);
+    el.querySelector('#tbPts').textContent=Math.min(pts,cfg.meta)+'/'+cfg.meta;
+    mostrarPuntoFlotante(base);
+    if(pts>=cfg.meta){ return levelUp(); }
+    if(tirosRestantes<=0){ return gameOver(); }
+  }
+  let flotante=null;
+  function mostrarPuntoFlotante(n){ flotante={ x:blanco.x, y:blanco.y, n, t:0 }; }
+
+  function gameOver(){
+    alive=false; Sonido.play('gameover');
+    const bn=el.querySelector('#tbBanner');
+    bn.innerHTML=`<span style="color:var(--magenta)">¡Sin tiros! Llegaste a ${pts}/${cfg.meta} pts</span>`;
+    const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel';
+    b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+  function levelUp(){
+    done=true; Sonido.play('nivel'); awardLevel('tiro', level);
+    Fiesta.guardarPuntaje('tiro', pts + (level-1)*100, level);
+    Fiesta.sumarEstrellas('tiro', level, false);
+    burst();
+    const bn=el.querySelector('#tbBanner');
+    const inf=esInfinito(TIRO_LEVELS, level+1);
+    bn.innerHTML= inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+
+  function draw(){
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1a0838'); g.addColorStop(1,'#05030f');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    glowJ(ctx,W*0.3,H*0.3,110,'rgba(122,60,255,.35)',.5);
+    glowJ(ctx,W*0.8,H*0.7,100,'rgba(38,150,232,.3)',.4);
+    stars.forEach(s=>{ ctx.fillStyle='rgba(255,255,255,'+s.a+')'; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,7); ctx.fill(); });
+    // blanco alienígena
+    glowJ(ctx,blanco.x,blanco.y,blanco.r+14,'rgba(255,46,154,.3)',.5);
+    [[1,'#ff2e9a'],[0.72,'#ffe14d'],[0.46,'#8cff5a'],[0.2,'#26e8ff']].forEach(([f,c])=>{ ctx.fillStyle=c; ctx.beginPath(); ctx.arc(blanco.x,blanco.y,blanco.r*f,0,7); ctx.fill(); ctx.strokeStyle='rgba(255,255,255,.5)'; ctx.lineWidth=1.2; ctx.stroke(); });
+    ctx.fillStyle='#0a0416'; ctx.beginPath(); ctx.arc(blanco.x-3,blanco.y-1,2,0,7); ctx.arc(blanco.x+3,blanco.y-1,2,0,7); ctx.fill();
+    // cañón
+    dibujarCanon(ctx, canonX, canonY, carga);
+    // rayo animado
+    if(rayo){
+      const mx=canonX+26, my=canonY-18;
+      const ex=mx+(rayo.tx-mx)*Math.min(1,rayo.t*1.6), ey=my+(rayo.ty-my)*Math.min(1,rayo.t*1.6);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle='rgba(38,232,255,.5)'; ctx.lineWidth=12; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.strokeStyle='rgba(120,240,255,.85)'; ctx.lineWidth=6; ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=2.5; ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(ex,ey); ctx.stroke(); ctx.restore();
+      glowJ(ctx,mx,my,16,'rgba(255,255,255,.9)',1);
+      if(rayo.t>=1){ glowJ(ctx,rayo.tx,rayo.ty,24,'rgba(255,255,255,.9)',1); }
+    }
+    // punto flotante de puntaje
+    if(flotante){ flotante.t+=0.03; flotante.y-=1.2;
+      ctx.globalAlpha=Math.max(0,1-flotante.t); ctx.fillStyle='#ffe14d'; ctx.font='700 18px "Baloo 2",serif'; ctx.textAlign='center';
+      ctx.fillText('+'+flotante.n, flotante.x, flotante.y); ctx.globalAlpha=1; ctx.textAlign='left';
+      if(flotante.t>=1) flotante=null; }
+    // barra de carga
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(W*0.15,H-24,W*0.7,12);
+    const fg=ctx.createLinearGradient(W*0.15,0,W*0.85,0); fg.addColorStop(0,'#26e8ff'); fg.addColorStop(.6,'#8cff5a'); fg.addColorStop(1,'#ffe14d');
+    ctx.fillStyle=fg; ctx.fillRect(W*0.15,H-24,W*0.7*carga,12);
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.strokeRect(W*0.15,H-24,W*0.7,12);
+    // marca de "potencia ideal" (~0.75)
+    ctx.fillStyle='#ff2e9a'; ctx.fillRect(W*0.15+W*0.7*0.75-1,H-27,3,18);
+    ctx.fillStyle='#26e8ff'; ctx.font='700 9px sans-serif'; ctx.fillText('⚡ CARGA',W*0.15,H-28);
+  }
+
+  function dibujarCanon(ctx,x,y,carga){
+    ctx.strokeStyle='#3a4a6a'; ctx.lineWidth=4; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(x,y+6); ctx.lineTo(x-12,y+22); ctx.moveTo(x,y+6); ctx.lineTo(x+12,y+22); ctx.stroke();
+    ctx.save(); ctx.translate(x,y); ctx.rotate(-0.5);
+    const bodyG=ctx.createLinearGradient(0,-14,0,14); bodyG.addColorStop(0,'#c7d2e8'); bodyG.addColorStop(.5,'#7a89ad'); bodyG.addColorStop(1,'#3a4560');
+    ctx.fillStyle=bodyG; ctx.strokeStyle='#20293e'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(-8,0,13,11,0,0,7); ctx.fill(); ctx.stroke();
+    // núcleo que brilla más cuanto más cargás
+    glowJ(ctx,-8,0,10+carga*10,'rgba(38,232,255,'+(0.5+carga*0.5)+')',1);
+    const core=ctx.createRadialGradient(-8,0,1,-8,0,7); core.addColorStop(0,'#eaffff'); core.addColorStop(.6,'#26e8ff'); core.addColorStop(1,'#0d6aa0');
+    ctx.fillStyle=core; ctx.beginPath(); ctx.arc(-8,0,6,0,7); ctx.fill();
+    ctx.fillStyle=bodyG; ctx.strokeStyle='#20293e'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(0,-7); ctx.lineTo(32,-6); ctx.lineTo(36,-8); ctx.lineTo(36,8); ctx.lineTo(32,6); ctx.lineTo(0,7); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle='#26e8ff'; ctx.lineWidth=2; [10,20,29].forEach(bx=>{ ctx.beginPath(); ctx.moveTo(bx,-6); ctx.lineTo(bx,6); ctx.stroke(); });
+    glowJ(ctx,38,0,8+carga*8,'rgba(38,232,255,'+(0.4+carga*0.6)+')',1);
+    ctx.restore();
+  }
+
+  function pos(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) }; }
+  cv.addEventListener('pointerdown',e=>{ e.preventDefault(); if(!alive||done||rayo||tirosRestantes<=0)return; cargando=true; carga=0; });
+  cv.addEventListener('pointerup',e=>{ e.preventDefault(); if(cargando) disparar(); });
+  cv.addEventListener('pointerleave',e=>{ if(cargando) disparar(); });
+  startLevel(1);
+  cleanup=()=>{ if(raf) cancelAnimationFrame(raf); };
+}
+
+
+/* ================================================================
+   JUEGOS NUEVOS (segunda tanda) — Submarino Explorador y Duelo de Magos
+   Mismo patrón: función Juego(el), tabla de 5 niveles + nivelDe(),
+   Fiesta.guardarPuntaje/sumarEstrellas. Reutilizan glowJ() ya definido.
+   ================================================================ */
+/* ============================================================
+   SUBMARINO EXPLORADOR · aventura · 5 niveles
+   Movés el submarino (arrastrando el dedo / con las flechas)
+   esquivando medusas y coral. Hay que juntar las perlas del
+   nivel. Si tocás una medusa, perdés una vida. Sin vidas = fin.
+   ============================================================ */
+const SUB_LEVELS=[
+  { meta:5, medusas:2, velMed:0.9, velScroll:0.7 },
+  { meta:6, medusas:3, velMed:1.2, velScroll:0.9 },
+  { meta:7, medusas:4, velMed:1.5, velScroll:1.1 },
+  { meta:8, medusas:5, velMed:1.9, velScroll:1.3 },
+  { meta:9, medusas:6, velMed:2.3, velScroll:1.5 },
+];
+
+function Submarino(el){
+  el.innerHTML=`<h2>🫧 Submarino Explorador</h2>
+    <p class="lead">Arrastrá para mover el submarino. Juntá las perlas 🫧 y esquivá las medusas.</p>
+    <div class="hud"><span class="lv" id="suLv"></span><span id="suLives">❤️❤️❤️</span><span>🫧 <span class="stat" id="suMeta">0</span></span></div>
+    <canvas id="suCanvas" width="300" height="380"></canvas>
+    <div class="lr"><button class="btn" id="suUp">▲</button><button class="btn" id="suDown">▼</button><button class="btn" id="suL">◀</button><button class="btn" id="suR">▶</button></div>
+    <div class="banner" id="suBanner"></div>`;
+  const cv=el.querySelector('#suCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+
+  let level,cfg,sub,medusas,perlas,corales,vidas,juntadas,alive,done,raf,tick,invuln,burbujas;
+  let mueve={x:0,y:0}, arrastrando=false;
+
+  function startLevel(l){
+    level=l; cfg=nivelDe(SUB_LEVELS,l);
+    sub={ x:W/2, y:H-70, r:20 };
+    medusas=[]; perlas=[]; corales=[]; vidas=3; juntadas=0; alive=true; done=false; tick=0; invuln=0;
+    for(let i=0;i<cfg.medusas;i++) nuevaMedusa(-Math.random()*H);
+    for(let i=0;i<cfg.meta;i++) nuevaPerla(-Math.random()*H*1.5);
+    for(let i=0;i<3;i++) corales.push({ x:Math.random()*W, base:H, alto:30+Math.random()*30, c:['#ff5a8a','#c96fd6','#ff8c5a'][i%3] });
+    burbujas=Array.from({length:14},()=>({x:Math.random()*W,y:Math.random()*H,r:1+Math.random()*3,v:0.3+Math.random()*0.6}));
+    setLives();
+    el.querySelector('#suLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#suMeta').textContent='0/'+cfg.meta;
+    el.querySelector('#suBanner').textContent='';
+    if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
+  }
+  function setLives(){ el.querySelector('#suLives').textContent='❤️'.repeat(Math.max(0,vidas))||'💀'; }
+  function nuevaMedusa(y){ medusas.push({ x:20+Math.random()*(W-40), y:y==null?-30:y, dx:(Math.random()<0.5?-1:1)*cfg.velMed, faseT:Math.random()*7, r:16 }); }
+  function nuevaPerla(y){ perlas.push({ x:24+Math.random()*(W-48), y:y==null?-20:y, tomada:false }); }
+
+  function frame(){
+    if(!alive){ draw(); return; }
+    tick++;
+    if(invuln>0) invuln--;
+    // mover submarino con botones/teclas
+    sub.x+=mueve.x*3.4; sub.y+=mueve.y*3.4;
+    sub.x=Math.max(sub.r+2, Math.min(W-sub.r-2, sub.x));
+    sub.y=Math.max(sub.r+2, Math.min(H-sub.r-2, sub.y));
+    // medusas suben (scroll) + se bambolean
+    medusas.forEach(m=>{ m.y+=cfg.velScroll; m.x+=m.dx; if(m.x<16||m.x>W-16) m.dx*=-1; });
+    perlas.forEach(p=>{ p.y+=cfg.velScroll; });
+    // reciclar lo que sale por abajo
+    medusas.forEach(m=>{ if(m.y>H+30){ m.y=-30; m.x=20+Math.random()*(W-40); } });
+    perlas=perlas.filter(p=>!(p.y>H+20 && !p.tomada) );
+    while(perlas.length < cfg.meta-juntadas) nuevaPerla();
+    // colisión con medusas
+    if(invuln<=0){ for(const m of medusas){ if(Math.hypot(sub.x-m.x,sub.y-m.y) < sub.r+m.r-4){ golpe(); break; } } }
+    // juntar perlas
+    perlas.forEach(p=>{ if(!p.tomada && Math.hypot(sub.x-p.x,sub.y-p.y)<sub.r+8){ p.tomada=true; juntadas++; Sonido.play('comer');
+      el.querySelector('#suMeta').textContent=Math.min(juntadas,cfg.meta)+'/'+cfg.meta;
+      if(juntadas>=cfg.meta){ return levelUp(); } } });
+    perlas=perlas.filter(p=>!p.tomada);
+    draw();
+    if(alive && !done) raf=requestAnimationFrame(frame);
+  }
+
+  function golpe(){
+    vidas--; setLives(); Sonido.play('choque'); Sonido.vibrar(80); invuln=70;
+    if(vidas<=0) return gameOver();
+  }
+  function gameOver(){
+    alive=false; Sonido.play('gameover');
+    const bn=el.querySelector('#suBanner');
+    bn.innerHTML=`<span style="color:var(--magenta)">¡Te tocó una medusa! 🪼</span>`;
+    const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel';
+    b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+  function levelUp(){
+    done=true; Sonido.play('nivel'); awardLevel('submarino', level);
+    Fiesta.guardarPuntaje('submarino', juntadas*20 + vidas*15 + (level-1)*100, level);
+    Fiesta.sumarEstrellas('submarino', level, false);
+    burst();
+    const bn=el.querySelector('#suBanner');
+    const inf=esInfinito(SUB_LEVELS, level+1);
+    bn.innerHTML= inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+
+  function draw(){
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1d7fa8'); g.addColorStop(.45,'#0f4f78'); g.addColorStop(1,'#04182e');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // god rays
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    for(let i=0;i<5;i++){ const x=30+i*68; const rg=ctx.createLinearGradient(x,0,x-40,H); rg.addColorStop(0,'rgba(120,220,255,.12)'); rg.addColorStop(1,'rgba(120,220,255,0)');
+      ctx.fillStyle=rg; ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x+24,0); ctx.lineTo(x-28,H); ctx.lineTo(x-60,H); ctx.closePath(); ctx.fill(); } ctx.restore();
+    // burbujas de fondo
+    burbujas.forEach(b=>{ b.y-=b.v; if(b.y<-4){ b.y=H+4; b.x=Math.random()*W; } ctx.strokeStyle='rgba(200,240,255,.35)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,7); ctx.stroke(); });
+    // corales (fondo)
+    corales.forEach(co=>{ const cg=ctx.createLinearGradient(co.x,H,co.x,H-co.alto); cg.addColorStop(0,co.c); cg.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.strokeStyle=cg; ctx.lineWidth=8; ctx.lineCap='round'; for(let b=-2;b<=2;b++){ ctx.beginPath(); ctx.moveTo(co.x,H); ctx.quadraticCurveTo(co.x+b*8,H-co.alto*0.6,co.x+b*14,H-co.alto); ctx.stroke(); } });
+    // perlas
+    perlas.forEach(p=>{ if(p.tomada)return; glowJ(ctx,p.x,p.y,12,'rgba(255,255,255,.5)',.7);
+      const pg=ctx.createRadialGradient(p.x-3,p.y-3,1,p.x,p.y,8); pg.addColorStop(0,'#fff'); pg.addColorStop(1,'#a9c6de');
+      ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(p.x,p.y,8,0,7); ctx.fill(); });
+    // medusas
+    medusas.forEach(m=>{ dibujarMedusa(ctx,m.x,m.y,m.r,tick+m.faseT*10); });
+    // submarino (parpadea si es invulnerable)
+    if(!(invuln>0 && (tick>>2)%2===0)) dibujarSub(ctx,sub.x,sub.y);
+  }
+  function dibujarMedusa(ctx,x,y,r,t){
+    glowJ(ctx,x,y+4,r+10,'rgba(200,140,255,.45)',.6);
+    const jg=ctx.createRadialGradient(x,y-4,2,x,y,r+2); jg.addColorStop(0,'rgba(240,210,255,.95)'); jg.addColorStop(1,'rgba(170,110,230,.5)');
+    ctx.fillStyle=jg; ctx.beginPath(); ctx.ellipse(x,y,r,r*0.8,0,Math.PI,0); ctx.fill();
+    ctx.fillStyle='rgba(240,210,255,.4)'; ctx.beginPath(); ctx.ellipse(x,y+1,r,3,0,0,Math.PI); ctx.fill();
+    ctx.strokeStyle='rgba(230,190,255,.7)'; ctx.lineWidth=2;
+    for(let i=-2;i<=2;i++){ const sw=Math.sin(t*0.1+i)*3; ctx.beginPath(); ctx.moveTo(x+i*5,y+4); ctx.quadraticCurveTo(x+i*5+sw,y+r,x+i*5-sw,y+r+8); ctx.stroke(); }
+  }
+  function dibujarSub(ctx,x,y){
+    const mg=ctx.createLinearGradient(x,y-16,x,y+16); mg.addColorStop(0,'#ffe98a'); mg.addColorStop(.5,'#f5b81f'); mg.addColorStop(1,'#a8730a');
+    ctx.fillStyle=mg; ctx.strokeStyle='#5c3d05'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.ellipse(x,y,20,13,0,0,7); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x-5,y-12); ctx.lineTo(x-4,y-20); ctx.lineTo(x+5,y-20); ctx.lineTo(x+6,y-12); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // portilla
+    glowJ(ctx,x+5,y,12,'rgba(120,220,255,.6)',.6);
+    const pg=ctx.createRadialGradient(x+2,y-3,1,x+5,y,8); pg.addColorStop(0,'#dff8ff'); pg.addColorStop(.6,'#39b7e8'); pg.addColorStop(1,'#0d5a80');
+    ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(x+5,y,7,0,7); ctx.fill(); ctx.strokeStyle='#5c3d05'; ctx.lineWidth=1.5; ctx.stroke();
+    // hélice
+    ctx.fillStyle='#8a8f9c'; ctx.save(); ctx.translate(x-20,y); for(let i=0;i<3;i++){ ctx.rotate(2.1); ctx.beginPath(); ctx.ellipse(0,5,2,5,0,0,7); ctx.fill(); } ctx.restore();
+    // faro
+    ctx.save(); ctx.globalCompositeOperation='lighter'; const fg=ctx.createLinearGradient(x+20,y,x+56,y); fg.addColorStop(0,'rgba(255,240,180,.4)'); fg.addColorStop(1,'rgba(255,240,180,0)');
+    ctx.fillStyle=fg; ctx.beginPath(); ctx.moveTo(x+18,y); ctx.lineTo(x+52,y-16); ctx.lineTo(x+52,y+16); ctx.closePath(); ctx.fill(); ctx.restore();
+  }
+
+  // Controles: botones + teclas + arrastre
+  function bindHold(id,dx,dy){ const b=el.querySelector(id);
+    const on=e=>{ e.preventDefault(); mueve.x=dx; mueve.y=dy; };
+    const off=e=>{ e.preventDefault(); if(dx)mueve.x=0; if(dy)mueve.y=0; };
+    b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointerleave',off); }
+  bindHold('#suUp',0,-1); bindHold('#suDown',0,1); bindHold('#suL',-1,0); bindHold('#suR',1,0);
+  function key(e){ if(e.code==='ArrowLeft')mueve.x=-1; else if(e.code==='ArrowRight')mueve.x=1; else if(e.code==='ArrowUp')mueve.y=-1; else if(e.code==='ArrowDown')mueve.y=1; }
+  function keyup(e){ if(e.code==='ArrowLeft'||e.code==='ArrowRight')mueve.x=0; if(e.code==='ArrowUp'||e.code==='ArrowDown')mueve.y=0; }
+  document.addEventListener('keydown',key); document.addEventListener('keyup',keyup);
+  // arrastre directo sobre el canvas
+  function pos(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) }; }
+  cv.addEventListener('pointerdown',e=>{ arrastrando=true; const p=pos(e); sub.x=p.x; sub.y=p.y; });
+  cv.addEventListener('pointermove',e=>{ if(arrastrando){ const p=pos(e); sub.x=p.x; sub.y=p.y; } });
+  cv.addEventListener('pointerup',()=>arrastrando=false);
+  cv.addEventListener('pointerleave',()=>arrastrando=false);
+  startLevel(1);
+  cleanup=()=>{ if(raf) cancelAnimationFrame(raf); document.removeEventListener('keydown',key); document.removeEventListener('keyup',keyup); };
+}
+
+/* ============================================================
+   DUELO DE MAGOS · reflejos · 5 niveles
+   Aparece un patrón de hechizo (una secuencia de nodos). Tenés
+   que tocarlos EN ORDEN, más rápido que el mago rival. Si los
+   hacés a tiempo ganás la ronda; si el rival llena su barra
+   antes, o te equivocás de nodo, perdés la ronda. Ganás el
+   nivel al ganar la cantidad de rondas pedida.
+   ============================================================ */
+const MAGOS_LEVELS=[
+  { meta:3, nodos:3, tiempoRival:6000 },
+  { meta:3, nodos:4, tiempoRival:5200 },
+  { meta:4, nodos:4, tiempoRival:4400 },
+  { meta:4, nodos:5, tiempoRival:3800 },
+  { meta:5, nodos:5, tiempoRival:3200 },
+];
+
+function DueloMagos(el){
+  el.innerHTML=`<h2>🔮 Duelo de Magos</h2>
+    <p class="lead">Tocá los nodos del hechizo EN ORDEN, más rápido que el mago rival 🧙</p>
+    <div class="hud"><span class="lv" id="dmLv"></span><span>Rondas: <span class="stat" id="dmMeta">0</span></span></div>
+    <canvas id="dmCanvas" width="300" height="380"></canvas>
+    <div class="banner" id="dmBanner"></div>`;
+  const cv=el.querySelector('#dmCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  const cx=W/2, cy=H*0.5, R=70;
+
+  let level,cfg,nodos,secuencia,idx,ganadas,rivalProg,rivalActivo,alive,done,raf,tick,resultado;
+
+  function startLevel(l){
+    level=l; cfg=nivelDe(MAGOS_LEVELS,l);
+    ganadas=0; alive=true; done=false; tick=0; resultado=null;
+    el.querySelector('#dmLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#dmMeta').textContent='0/'+cfg.meta;
+    el.querySelector('#dmBanner').textContent='';
+    nuevaRonda();
+    if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
+  }
+  function nuevaRonda(){
+    resultado=null; idx=0; rivalProg=0; rivalActivo=true;
+    // repartir N nodos en círculo, en posiciones aleatorias
+    const n=cfg.nodos; const angs=[];
+    for(let i=0;i<n;i++) angs.push(i*(Math.PI*2/n)+Math.random()*0.4);
+    // barajar el orden en que hay que tocarlos
+    const orden=[...Array(n).keys()]; for(let i=n-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [orden[i],orden[j]]=[orden[j],orden[i]]; }
+    nodos=angs.map((a,i)=>({ x:cx+Math.cos(a)*R, y:cy+Math.sin(a)*R, i }));
+    secuencia=orden;   // secuencia[k] = índice de nodo que hay que tocar en el paso k
+    rondaT0=performance.now();
+  }
+  let rondaT0=0;
+
+  function frame(){
+    if(!alive){ draw(); return; }
+    tick++;
+    if(rivalActivo && !resultado){
+      const cfg2=nivelDe(MAGOS_LEVELS,level);
+      rivalProg = Math.min(1, (performance.now()-rondaT0)/cfg2.tiempoRival);
+      if(rivalProg>=1){ perderRonda('¡El rival fue más rápido! 🧙‍♂️⚡'); }
+    }
+    draw();
+    if(alive && !done) raf=requestAnimationFrame(frame);
+  }
+
+  function tocarNodo(n){
+    if(!alive||done||resultado) return;
+    const esperado=secuencia[idx];
+    if(n.i===esperado){
+      Sonido.play('tap'); idx++;
+      if(idx>=secuencia.length){ ganarRonda(); }
+    } else {
+      Sonido.play('error'); Sonido.vibrar(60);
+      perderRonda('¡Nodo equivocado! ❌');
+    }
+  }
+  function ganarRonda(){
+    resultado='win'; rivalActivo=false; ganadas++; Sonido.play('acierto'); burst(50);
+    el.querySelector('#dmMeta').textContent=Math.min(ganadas,cfg.meta)+'/'+cfg.meta;
+    if(ganadas>=cfg.meta){ return levelUp(); }
+    setTimeout(()=>{ if(alive&&!done) nuevaRonda(); }, 700);
+  }
+  function perderRonda(msg){
+    resultado='lose'; rivalActivo=false; alive=false; Sonido.play('gameover');
+    const bn=el.querySelector('#dmBanner');
+    bn.innerHTML=`<span style="color:var(--magenta)">${msg}</span> Ganaste ${ganadas}/${cfg.meta} rondas.`;
+    const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel';
+    b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+  function levelUp(){
+    done=true; Sonido.play('nivel'); awardLevel('magos', level);
+    Fiesta.guardarPuntaje('magos', ganadas*40 + (level-1)*100, level);
+    Fiesta.sumarEstrellas('magos', level, false);
+    burst();
+    const bn=el.querySelector('#dmBanner');
+    const inf=esInfinito(MAGOS_LEVELS, level+1);
+    bn.innerHTML= inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+    const b=document.createElement('button'); b.className='btn mt';
+    b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
+    bn.appendChild(document.createElement('br')); bn.appendChild(b);
+  }
+
+  function draw(){
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#241155'); g.addColorStop(1,'#06040f');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    // estrellas
+    for(let i=0;i<30;i++){ const sx=(i*53)%W, sy=(i*97)%H; ctx.fillStyle='rgba(255,255,255,'+(0.2+((i*13)%10)/25)+')'; ctx.beginPath(); ctx.arc(sx,sy,1,0,7); ctx.fill(); }
+    glowJ(ctx,cx,cy,120,'rgba(122,60,255,.22)',.6);
+    // círculo mágico
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(180,120,255,.5)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(cx,cy,R+14,0,7); ctx.stroke(); ctx.beginPath(); ctx.arc(cx,cy,R+6,0,7); ctx.stroke(); ctx.restore();
+    // línea del hechizo ya hecho (nodos tocados en orden)
+    if(idx>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(255,225,77,.9)'; ctx.lineWidth=4; ctx.lineJoin='round'; ctx.shadowColor='#ffe14d'; ctx.shadowBlur=12;
+      ctx.beginPath(); for(let k=0;k<idx;k++){ const nd=nodos[secuencia[k]]; k?ctx.lineTo(nd.x,nd.y):ctx.moveTo(nd.x,nd.y); } ctx.stroke(); ctx.restore(); }
+    // nodos
+    nodos.forEach(nd=>{
+      const paso=secuencia.indexOf(nd.i);
+      const hecho=paso<idx;
+      const esProximo=paso===idx && !resultado;
+      const col= hecho?'#8cff5a' : esProximo?'#ffe14d' : '#7a3cff';
+      glowJ(ctx,nd.x,nd.y,esProximo?18:12,col.replace('#','rgba(')==='rgba('?col:col, esProximo?0.9:0.5);
+      const ng=ctx.createRadialGradient(nd.x-2,nd.y-2,1,nd.x,nd.y,11); ng.addColorStop(0,'#fff'); ng.addColorStop(1,col);
+      ctx.fillStyle=ng; ctx.beginPath(); ctx.arc(nd.x,nd.y,esProximo?12:9,0,7); ctx.fill();
+      // número de orden (ayuda visual)
+      ctx.fillStyle='#0a0416'; ctx.font='700 11px "Baloo 2",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(String(paso+1), nd.x, nd.y); ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    });
+    // magos a los costados
+    dibujarMagoMini(ctx, 30, H*0.5+10, 1, '#1a5a9e','#3aa0e8', ganadas);
+    dibujarMagoMini(ctx, W-30, H*0.5+10, -1, '#9e1a5a','#ff2e9a', 0);
+    // barra del rival (progreso de su hechizo)
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(W*0.15,H-22,W*0.7,12);
+    ctx.fillStyle='#ff2e9a'; ctx.fillRect(W*0.15,H-22,W*0.7*rivalProg,12);
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.strokeRect(W*0.15,H-22,W*0.7,12);
+    ctx.fillStyle='#ff2e9a'; ctx.font='700 9px sans-serif'; ctx.fillText('🧙 RIVAL',W*0.15,H-26);
+    if(resultado==='win'){ ctx.fillStyle='#8cff5a'; ctx.font='700 22px "Baloo 2",serif'; ctx.textAlign='center'; ctx.fillText('¡RONDA GANADA!',cx,cy-R-24); ctx.textAlign='left'; }
+  }
+  function dibujarMagoMini(ctx,x,base,cara,robe,robe2,brillo){
+    ctx.save(); ctx.translate(x,base); ctx.scale(cara,1);
+    const rg=ctx.createLinearGradient(0,-24,0,36); rg.addColorStop(0,robe2); rg.addColorStop(1,robe);
+    ctx.fillStyle=rg; ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-8,-18); ctx.quadraticCurveTo(-14,-4,-20,34); ctx.quadraticCurveTo(0,40,20,34); ctx.quadraticCurveTo(14,-4,8,-18); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // báculo + orbe
+    const wood=ctx.createLinearGradient(16,-26,20,24); wood.addColorStop(0,'#b5813f'); wood.addColorStop(1,'#6b4a1f');
+    ctx.strokeStyle=wood; ctx.lineWidth=3; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(16,-28); ctx.lineTo(18,24); ctx.stroke();
+    glowJ(ctx,16,-34,16,'rgba(255,225,120,'+(0.6+(brillo?0.4:0))+')',1);
+    const og=ctx.createRadialGradient(14,-37,1,16,-34,8); og.addColorStop(0,'#fff'); og.addColorStop(.5,robe2); og.addColorStop(1,robe);
+    ctx.fillStyle=og; ctx.beginPath(); ctx.arc(16,-34,7,0,7); ctx.fill();
+    // cabeza + barba
+    ctx.fillStyle='#f0c9a0'; ctx.beginPath(); ctx.arc(0,-24,8,0,7); ctx.fill();
+    ctx.fillStyle='#e8e8f0'; ctx.beginPath(); ctx.moveTo(-6,-20); ctx.quadraticCurveTo(0,-4,6,-20); ctx.quadraticCurveTo(0,-14,-6,-20); ctx.fill();
+    // ojos
+    ctx.fillStyle='#2a2a4a'; ctx.beginPath(); ctx.arc(-3,-25,1.4,0,7); ctx.arc(3,-25,1.4,0,7); ctx.fill();
+    // sombrero
+    ctx.fillStyle=robe; ctx.beginPath(); ctx.ellipse(0,-31,13,4,0,0,7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-10,-31); ctx.quadraticCurveTo(-4,-50,10,-56); ctx.quadraticCurveTo(6,-40,10,-31); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ffe14d'; ctx.fillRect(-10,-34,20,3);
+    ctx.restore();
+  }
+
+  function pos(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) }; }
+  cv.addEventListener('pointerdown',e=>{ const p=pos(e); for(const nd of nodos){ if(Math.hypot(p.x-nd.x,p.y-nd.y)<20){ tocarNodo(nd); break; } } });
+  startLevel(1);
+  cleanup=()=>{ if(raf) cancelAnimationFrame(raf); };
 }
 
 /* ================================================================
