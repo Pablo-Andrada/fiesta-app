@@ -4491,11 +4491,19 @@ function Simon(el){
    hueco y juntar monedas. Chocar un cristal o el piso = perder.
    ============================================================ */
 const DRAGON_LEVELS=[
+<<<<<<< HEAD
   { meta:5,  hueco:135, sep:210, vel:1.7, monedas:0.5 },
   { meta:7,  hueco:125, sep:195, vel:2.0, monedas:0.5 },
   { meta:9,  hueco:116, sep:180, vel:2.3, monedas:0.55 },
   { meta:11, hueco:108, sep:168, vel:2.6, monedas:0.6 },
   { meta:13, hueco:100, sep:156, vel:3.0, monedas:0.6 },
+=======
+  { meta:5,  hueco:150, sep:230, vel:1.5, monedas:0.6, zigzag:0.35 },
+  { meta:7,  hueco:142, sep:215, vel:1.7, monedas:0.6, zigzag:0.45 },
+  { meta:9,  hueco:134, sep:200, vel:2.0, monedas:0.6, zigzag:0.55 },
+  { meta:11, hueco:126, sep:188, vel:2.2, monedas:0.6, zigzag:0.65 },
+  { meta:13, hueco:118, sep:176, vel:2.5, monedas:0.6, zigzag:0.75 },
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
 ];
 
 function DragonVolador(el){
@@ -4506,16 +4514,28 @@ function DragonVolador(el){
     <div class="banner" id="dvBanner"></div>`;
   const cv=el.querySelector('#dvCanvas'), ctx=cv.getContext('2d');
   const W=cv.width, H=cv.height;
+<<<<<<< HEAD
   const G=0.42, FLAP=-6.4, SUELO=H-16;
 
   let level,cfg,dragon,tubos,monedas,pasados,coins,alive,done,raf,tick;
+=======
+  const G=0.28, FLAP=-5.4, SUELO=H-16;
+
+  let level,cfg,dragon,tubos,monedas,pasados,coins,alive,done,raf,tick,esperando,zigDir,ultimoCentro;
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
 
   function startLevel(l){
     level=l; cfg=nivelDe(DRAGON_LEVELS,l);
     dragon={ x:78, y:H/2, vy:0, rot:0 };
     tubos=[]; monedas=[]; pasados=0; coins=0; alive=true; done=false; tick=0;
+<<<<<<< HEAD
     // primer cristal bien adelante para dar tiempo
     let x=W+40;
+=======
+    esperando=true; zigDir=Math.random()<0.5?-1:1; ultimoCentro=H/2;   // arranca "en pausa" hasta el primer toque
+    // primer cristal bien adelante para dar tiempo
+    let x=W+60;
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     for(let i=0;i<4;i++){ agregarTubo(x); x+=cfg.sep; }
     el.querySelector('#dvLv').textContent='Nivel '+l+'/5';
     el.querySelector('#dvMeta').textContent='0/'+cfg.meta;
@@ -4524,16 +4544,42 @@ function DragonVolador(el){
     if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
   }
   function agregarTubo(x){
+<<<<<<< HEAD
     const margen=54;
     const centro=margen+cfg.hueco/2 + Math.random()*(H-2*margen-cfg.hueco);
     tubos.push({ x, centro, pasado:false, color: Math.random()<0.5?['214,46,154','255,140,200']:['38,180,232','150,240,255'] });
     if(Math.random()<cfg.monedas) monedas.push({ x:x+cfg.sep/2, y:centro, tomada:false });
   }
   function aletear(){ if(!alive||done)return; dragon.vy=FLAP; Sonido.play('tap'); }
+=======
+    const margen=48;
+    // RECOVECOS más interesantes: el hueco alterna arriba/abajo (zig-zag),
+    // así el vuelo es ondulante en vez de huecos al azar sin patrón.
+    const amplitud=(H-2*margen-cfg.hueco)/2 * cfg.zigzag;
+    const medio=(H)/2;
+    let centro=medio + zigDir*amplitud + (Math.random()-0.5)*40;
+    centro=Math.max(margen+cfg.hueco/2, Math.min(H-margen-cfg.hueco/2, centro));
+    zigDir*=-1;
+    ultimoCentro=centro;
+    tubos.push({ x, centro, pasado:false, color: Math.random()<0.5?['214,46,154','255,140,200']:['38,180,232','150,240,255'] });
+    if(Math.random()<cfg.monedas) monedas.push({ x:x+cfg.sep/2, y:centro, tomada:false });
+  }
+  function aletear(){ if(!alive||done)return; esperando=false; dragon.vy=FLAP; Sonido.play('tap'); }
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
 
   function frame(){
     if(!alive){ draw(); return; }
     tick++;
+<<<<<<< HEAD
+=======
+    if(esperando){
+      // Flota suave esperando el primer toque (no cae ni avanza)
+      dragon.y = H/2 + Math.sin(tick*0.06)*10;
+      draw();
+      raf=requestAnimationFrame(frame);
+      return;
+    }
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     dragon.vy+=G; dragon.y+=dragon.vy;
     dragon.rot=Math.max(-0.5, Math.min(1.1, dragon.vy*0.09));
     // techo y piso
@@ -4607,11 +4653,34 @@ function DragonVolador(el){
     // piso
     ctx.fillStyle='#1a0d2e'; ctx.fillRect(0,SUELO,W,H-SUELO);
     ctx.fillStyle='rgba(180,120,255,.25)'; ctx.fillRect(0,SUELO,W,3);
+<<<<<<< HEAD
     // dragón (usa el dibujarDragon global, ver más abajo)
     ctx.save(); ctx.translate(dragon.x,dragon.y); ctx.rotate(dragon.rot);
     const flap=Math.sin(tick*0.4)*0.14;
     dibujarDragonMini(ctx, flap);
     ctx.restore();
+=======
+    // dragón (más chico que antes)
+    ctx.save(); ctx.translate(dragon.x,dragon.y); ctx.rotate(dragon.rot); ctx.scale(0.78,0.78);
+    const flap=Math.sin(tick*0.4)*0.14;
+    dibujarDragonMini(ctx, flap);
+    ctx.restore();
+    // Cartel de instrucción mientras espera el primer toque
+    if(esperando){
+      ctx.save();
+      const pulso=0.6+Math.sin(tick*0.08)*0.4;
+      ctx.globalAlpha=pulso;
+      ctx.fillStyle='rgba(10,4,22,.55)'; ctx.fillRect(0,H*0.30,W,64);
+      ctx.globalAlpha=1;
+      ctx.fillStyle='#ffe14d'; ctx.font='800 22px "Baloo 2",sans-serif'; ctx.textAlign='center';
+      ctx.shadowColor='rgba(255,225,77,.8)'; ctx.shadowBlur=12;
+      ctx.fillText('👆 TOCÁ LA PANTALLA', W/2, H*0.34+8);
+      ctx.shadowBlur=0;
+      ctx.fillStyle='#fff'; ctx.font='600 13px "Baloo 2",sans-serif';
+      ctx.fillText('para que el dragón vuele', W/2, H*0.34+30);
+      ctx.textAlign='left'; ctx.restore();
+    }
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
   }
   function dibujarCristal(ctx,x,arriba,alto,rgbPair){
     const [rgb,rgb2]=rgbPair; const y0=arriba?0:H, y1=arriba?alto:H-alto; const w=22;
@@ -4685,6 +4754,7 @@ function dibujarDragonMini(ctx, flap){
 }
 
 /* ============================================================
+<<<<<<< HEAD
    TIRO AL BLANCO GALÁCTICO · puntería · 5 niveles
    Mantené apretado para CARGAR energía (barra), soltá para
    disparar un rayo láser. El blanco se mueve. Pegale cerca del
@@ -4772,23 +4842,150 @@ function TiroBlanco(el){
     alive=false; Sonido.play('gameover');
     const bn=el.querySelector('#tbBanner');
     bn.innerHTML=`<span style="color:var(--magenta)">¡Sin tiros! Llegaste a ${pts}/${cfg.meta} pts</span>`;
+=======
+   CAÑÓN GALÁCTICO · defensa espacial · 5 niveles
+   Una nave-cañón en el centro se defiende de METEORITOS que
+   caen hacia ella. Tocás el botón DISPARAR (o la pantalla) y
+   el rayo sale automáticamente hacia el meteorito más cercano
+   y lo desintegra: NO hay que apuntar. Cada nivel el arma
+   mejora (rayo más potente / doble / múltiple). Hay que
+   destruir la cantidad de meteoritos del nivel. Si un meteorito
+   llega a la nave, perdés una vida (3 vidas).
+   ============================================================ */
+const TIRO_LEVELS=[
+  { meta:12, spawn:1400, velMet:0.8, arma:0 },
+  { meta:16, spawn:1200, velMet:1.1, arma:1 },
+  { meta:20, spawn:1000, velMet:1.4, arma:2 },
+  { meta:24, spawn:850,  velMet:1.7, arma:3 },
+  { meta:28, spawn:720,  velMet:2.1, arma:4 },
+];
+/* Las 5 armas: mejoran a medida que subís de nivel */
+const ARMAS=[
+  { nombre:'Rayo Básico',  color:'#26e8ff', grosor:5,  dano:1, multi:1, cad:420 },
+  { nombre:'Rayo Doble',   color:'#8cff5a', grosor:5,  dano:1, multi:2, cad:380 },
+  { nombre:'Plasma',       color:'#ffe14d', grosor:7,  dano:2, multi:2, cad:340 },
+  { nombre:'Rayo Triple',  color:'#ff8c1a', grosor:7,  dano:2, multi:3, cad:300 },
+  { nombre:'MEGA LÁSER',   color:'#ff2e9a', grosor:10, dano:3, multi:4, cad:260 },
+];
+
+function TiroBlanco(el){
+  el.innerHTML=`<h2>🎯 Cañón Galáctico</h2>
+    <p class="lead">¡Defendé la nave! Tocá DISPARAR y el rayo desintegra el meteorito más cercano. No hace falta apuntar.</p>
+    <div class="hud"><span class="lv" id="tbLv"></span><span id="tbLives">❤️❤️❤️</span><span>☄️ <span class="stat" id="tbPts">0</span></span></div>
+    <div class="center" style="font-weight:800;font-size:13px;margin-bottom:6px">Arma: <span class="stat" id="tbArma">Rayo Básico</span></div>
+    <canvas id="tbCanvas" width="300" height="380"></canvas>
+    <div class="lr"><button class="btn danger" id="tbFire" style="flex:1;font-size:20px">🔥 DISPARAR</button></div>
+    <div class="banner" id="tbBanner"></div>`;
+  const cv=el.querySelector('#tbCanvas'), ctx=cv.getContext('2d');
+  const W=cv.width, H=cv.height;
+  const naveX=W/2, naveY=H-40;
+
+  let level,cfg,arma,meteoritos,rayos,destruidos,vidas,alive,done,raf,tick,puedeDisparar,estrellas,nebulosas,shakeT;
+
+  function startLevel(l){
+    level=l; cfg=nivelDe(TIRO_LEVELS,l); arma=ARMAS[Math.min(cfg.arma,ARMAS.length-1)];
+    meteoritos=[]; rayos=[]; destruidos=0; vidas=3; alive=true; done=false; tick=0; puedeDisparar=true; shakeT=0;
+    estrellas=Array.from({length:60},()=>({x:Math.random()*W,y:Math.random()*H,r:Math.random()*1.5+0.3,a:0.2+Math.random()*0.7,tw:Math.random()*7}));
+    nebulosas=[{x:W*0.25,y:H*0.3,r:120,c:'rgba(122,60,255,.16)'},{x:W*0.8,y:H*0.6,r:130,c:'rgba(38,120,232,.14)'},{x:W*0.5,y:H*0.15,r:90,c:'rgba(255,46,154,.10)'}];
+    setLives();
+    el.querySelector('#tbLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#tbPts').textContent='0/'+cfg.meta;
+    el.querySelector('#tbArma').textContent=arma.nombre;
+    el.querySelector('#tbBanner').textContent='';
+    lastSpawn=performance.now();
+    if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
+  }
+  function setLives(){ el.querySelector('#tbLives').textContent='❤️'.repeat(Math.max(0,vidas))||'💀'; }
+  let lastSpawn=0;
+
+  function nuevoMeteorito(){
+    const x=24+Math.random()*(W-48);
+    const vida=1+((Math.random()*cfg.arma)|0>2?1:0);
+    const r=13+Math.random()*10;
+    meteoritos.push({ x, y:-r, r, vida:1+ (level>=3?1:0), vidaMax:1+(level>=3?1:0),
+      vx:(naveX-x)/260*cfg.velMet, vy:cfg.velMet*(0.9+Math.random()*0.5),
+      giro:Math.random()*7, vg:(Math.random()-0.5)*0.06,
+      crateres:Array.from({length:4},()=>({dx:(Math.random()-0.5)*1.2,dy:(Math.random()-0.5)*1.2,r:0.12+Math.random()*0.18})) });
+  }
+
+  function frame(){
+    if(!alive){ draw(); return; }
+    tick++; if(shakeT>0) shakeT--;
+    const now=performance.now();
+    if(now-lastSpawn>cfg.spawn){ lastSpawn=now; nuevoMeteorito(); }
+    // mover meteoritos hacia la nave
+    meteoritos.forEach(m=>{ m.x+=m.vx; m.y+=m.vy; m.giro+=m.vg; });
+    // ¿alguno llegó a la nave?
+    for(let i=meteoritos.length-1;i>=0;i--){ const m=meteoritos[i];
+      if(Math.hypot(m.x-naveX,m.y-naveY)<m.r+18){ meteoritos.splice(i,1); golpeNave(); if(!alive)return; }
+      else if(m.y>H+30){ meteoritos.splice(i,1); }
+    }
+    // animar rayos
+    rayos.forEach(r=>{ r.t+=0.16; });
+    rayos=rayos.filter(r=>r.t<1);
+    draw();
+    if(alive && !done) raf=requestAnimationFrame(frame);
+  }
+
+  function disparar(){
+    if(!alive||done||!puedeDisparar) return;
+    if(meteoritos.length===0){ Sonido.play('tap'); return; }
+    // elegir los 'multi' meteoritos más cercanos a la nave
+    const ordenados=[...meteoritos].sort((a,b)=>Math.hypot(a.x-naveX,a.y-naveY)-Math.hypot(b.x-naveX,b.y-naveY));
+    const objetivos=ordenados.slice(0,arma.multi);
+    objetivos.forEach(m=>{
+      rayos.push({ tx:m.x, ty:m.y, t:0 });
+      m.vida-=arma.dano;
+      if(m.vida<=0){ destruir(m); }
+    });
+    Sonido.play('disparo'); shakeT=4;
+    puedeDisparar=false; setTimeout(()=>puedeDisparar=true, arma.cad);
+  }
+  function destruir(m){
+    const i=meteoritos.indexOf(m); if(i<0)return;
+    meteoritos.splice(i,1);
+    destruidos++; Sonido.play('explosion'); burst(30);
+    el.querySelector('#tbPts').textContent=Math.min(destruidos,cfg.meta)+'/'+cfg.meta;
+    // partículas de explosión
+    for(let k=0;k<8;k++) rayos.push({ explo:true, x:m.x, y:m.y, ang:k*0.8, t:0 });
+    if(destruidos>=cfg.meta){ return levelUp(); }
+  }
+  function golpeNave(){
+    vidas--; setLives(); Sonido.play('choque'); Sonido.vibrar(90); shakeT=8;
+    if(vidas<=0) return gameOver();
+  }
+  function gameOver(){
+    alive=false; Sonido.play('gameover');
+    const bn=el.querySelector('#tbBanner');
+    bn.innerHTML=`<span style="color:var(--magenta)">¡La nave fue destruida! ☄️💥</span> ${destruidos}/${cfg.meta} meteoritos.`;
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel';
     b.onclick=()=>startLevel(level); bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
   function levelUp(){
     done=true; Sonido.play('nivel'); awardLevel('tiro', level);
+<<<<<<< HEAD
     Fiesta.guardarPuntaje('tiro', pts + (level-1)*100, level);
+=======
+    Fiesta.guardarPuntaje('tiro', destruidos*10 + vidas*20 + (level-1)*100, level);
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     Fiesta.sumarEstrellas('tiro', level, false);
     burst();
     const bn=el.querySelector('#tbBanner');
     const inf=esInfinito(TIRO_LEVELS, level+1);
+<<<<<<< HEAD
     bn.innerHTML= inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`;
+=======
+    const prox=ARMAS[Math.min(nivelDe(TIRO_LEVELS,level+1).arma,ARMAS.length-1)];
+    bn.innerHTML= (inf ? `¡Nivel ${level} superado! ♾️` : `¡Nivel ${level} superado! ⭐`) + `<br><span style="color:var(--cyan)">Nueva arma: ${prox.nombre}</span>`;
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     const b=document.createElement('button'); b.className='btn mt';
     b.textContent=(inf?'♾️ Nivel ':'Nivel ')+(level+1)+' ▶'; b.onclick=()=>startLevel(level+1);
     bn.appendChild(document.createElement('br')); bn.appendChild(b);
   }
 
   function draw(){
+<<<<<<< HEAD
     const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#1a0838'); g.addColorStop(1,'#05030f');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
     glowJ(ctx,W*0.3,H*0.3,110,'rgba(122,60,255,.35)',.5);
@@ -4850,6 +5047,74 @@ function TiroBlanco(el){
   cv.addEventListener('pointerleave',e=>{ if(cargando) disparar(); });
   startLevel(1);
   cleanup=()=>{ if(raf) cancelAnimationFrame(raf); };
+=======
+    ctx.save();
+    if(shakeT>0){ ctx.translate((Math.random()-0.5)*shakeT, (Math.random()-0.5)*shakeT); }
+    // FONDO OSCURO con nebulosas y campo de estrellas titilante
+    const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#0a0620'); g.addColorStop(.5,'#0d0a2a'); g.addColorStop(1,'#05030f');
+    ctx.fillStyle=g; ctx.fillRect(-10,-10,W+20,H+20);
+    nebulosas.forEach(n=>glowJ(ctx,n.x,n.y,n.r,n.c,.7));
+    estrellas.forEach(s=>{ const tw=0.5+Math.sin(tick*0.05+s.tw)*0.5; ctx.fillStyle='rgba(255,255,255,'+(s.a*tw)+')'; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,7); ctx.fill(); });
+    // planeta tenue de fondo
+    const pg=ctx.createRadialGradient(W*0.82,H*0.16,3,W*0.82,H*0.16,30); pg.addColorStop(0,'rgba(122,80,200,.5)'); pg.addColorStop(1,'rgba(60,30,90,0)');
+    ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(W*0.82,H*0.16,30,0,7); ctx.fill();
+
+    // meteoritos
+    meteoritos.forEach(m=>dibujarMeteorito(ctx,m));
+    // rayos (líneas desde la nave al objetivo)
+    rayos.forEach(r=>{
+      if(r.explo){ const d=r.t*20; ctx.strokeStyle='rgba(255,180,80,'+(1-r.t)+')'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(r.x+Math.cos(r.ang)*d,r.y+Math.sin(r.ang)*d); ctx.lineTo(r.x+Math.cos(r.ang)*(d+6),r.y+Math.sin(r.ang)*(d+6)); ctx.stroke(); return; }
+      const mx=naveX, my=naveY-16;
+      const ex=mx+(r.tx-mx)*Math.min(1,r.t*1.8), ey=my+(r.ty-my)*Math.min(1,r.t*1.8);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle=hexA(arma.color,.5); ctx.lineWidth=arma.grosor+6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.strokeStyle=hexA(arma.color,.85); ctx.lineWidth=arma.grosor; ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(ex,ey); ctx.stroke();
+      ctx.strokeStyle='#fff'; ctx.lineWidth=Math.max(2,arma.grosor-3); ctx.beginPath(); ctx.moveTo(mx,my); ctx.lineTo(ex,ey); ctx.stroke(); ctx.restore();
+      glowJ(ctx,ex,ey,14,hexA(arma.color,.9),1);
+    });
+    // NAVE-CAÑÓN defensora
+    dibujarNaveCanon(ctx, naveX, naveY, arma.color);
+    ctx.restore();
+  }
+  function dibujarMeteorito(ctx,m){
+    ctx.save(); ctx.translate(m.x,m.y); ctx.rotate(m.giro);
+    glowJ(ctx,0,0,m.r+8,'rgba(255,140,60,.3)',.5);
+    const rg=ctx.createRadialGradient(-m.r*0.3,-m.r*0.3,2,0,0,m.r); rg.addColorStop(0,'#8a6a4a'); rg.addColorStop(.6,'#5c3f28'); rg.addColorStop(1,'#2e1d12');
+    ctx.fillStyle=rg; ctx.strokeStyle='#20140a'; ctx.lineWidth=2;
+    ctx.beginPath(); for(let i=0;i<8;i++){ const a=i/8*Math.PI*2; const rr=m.r*(0.82+((i*37)%10)/40); ctx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr); } ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle='rgba(0,0,0,.35)'; m.crateres.forEach(c=>{ ctx.beginPath(); ctx.arc(c.dx*m.r,c.dy*m.r,c.r*m.r,0,7); ctx.fill(); });
+    // estela de fuego
+    ctx.restore();
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const tg=ctx.createLinearGradient(m.x,m.y-m.r,m.x,m.y-m.r-22); tg.addColorStop(0,'rgba(255,150,40,.5)'); tg.addColorStop(1,'rgba(255,80,0,0)');
+    ctx.fillStyle=tg; ctx.beginPath(); ctx.moveTo(m.x-m.r*0.6,m.y-m.r*0.5); ctx.lineTo(m.x+m.r*0.6,m.y-m.r*0.5); ctx.lineTo(m.x,m.y-m.r-22); ctx.closePath(); ctx.fill(); ctx.restore();
+    // barra de vida si tiene más de 1
+    if(m.vidaMax>1){ ctx.fillStyle='rgba(0,0,0,.5)'; ctx.fillRect(m.x-m.r,m.y+m.r+3,m.r*2,3); ctx.fillStyle='#8cff5a'; ctx.fillRect(m.x-m.r,m.y+m.r+3,m.r*2*(m.vida/m.vidaMax),3); }
+  }
+  function dibujarNaveCanon(ctx,x,y,color){
+    glowJ(ctx,x,y,30,hexA(color,.4),.6);
+    // base/escudo
+    const bg=ctx.createLinearGradient(x,y-18,x,y+14); bg.addColorStop(0,'#c7d2e8'); bg.addColorStop(.5,'#7a89ad'); bg.addColorStop(1,'#3a4560');
+    ctx.fillStyle=bg; ctx.strokeStyle='#20293e'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x-24,y+12); ctx.lineTo(x-18,y-6); ctx.quadraticCurveTo(x,y-20,x+18,y-6); ctx.lineTo(x+24,y+12); ctx.closePath(); ctx.fill(); ctx.stroke();
+    // cúpula
+    const cg=ctx.createRadialGradient(x-3,y-10,1,x,y-6,12); cg.addColorStop(0,'#eaffff'); cg.addColorStop(.6,color); cg.addColorStop(1,'#0d3a55');
+    ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(x,y-4,10,Math.PI,0); ctx.fill(); ctx.strokeStyle='#20293e'; ctx.stroke();
+    // cañón central
+    ctx.fillStyle=bg; ctx.fillRect(x-4,y-24,8,14); ctx.strokeRect(x-4,y-24,8,14);
+    glowJ(ctx,x,y-24,8,hexA(color,.9),1);
+    // motores
+    ctx.fillStyle='rgba(255,180,70,.85)'; [[-14,14],[14,14]].forEach(([dx,dy])=>{ ctx.beginPath(); ctx.ellipse(x+dx,y+dy,4,5+((tick/6+dx)%3),0,0,7); ctx.fill(); });
+  }
+  function hexA(hex,a){ const n=parseInt(hex.slice(1),16); return 'rgba('+((n>>16)&255)+','+((n>>8)&255)+','+(n&255)+','+a+')'; }
+
+  el.querySelector('#tbFire').addEventListener('pointerdown',e=>{ e.preventDefault(); disparar(); });
+  cv.addEventListener('pointerdown',e=>{ e.preventDefault(); disparar(); });
+  function key(e){ if(e.code==='Space'){ e.preventDefault(); disparar(); } }
+  document.addEventListener('keydown',key);
+  startLevel(1);
+  cleanup=()=>{ if(raf) cancelAnimationFrame(raf); document.removeEventListener('keydown',key); };
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
 }
 
 
@@ -4877,7 +5142,15 @@ function Submarino(el){
     <p class="lead">Arrastrá para mover el submarino. Juntá las perlas 🫧 y esquivá las medusas.</p>
     <div class="hud"><span class="lv" id="suLv"></span><span id="suLives">❤️❤️❤️</span><span>🫧 <span class="stat" id="suMeta">0</span></span></div>
     <canvas id="suCanvas" width="300" height="380"></canvas>
+<<<<<<< HEAD
     <div class="lr"><button class="btn" id="suUp">▲</button><button class="btn" id="suDown">▼</button><button class="btn" id="suL">◀</button><button class="btn" id="suR">▶</button></div>
+=======
+    <div class="dpad">
+      <span class="sp"></span><button class="btn" data-d="up">▲</button><span class="sp"></span>
+      <button class="btn" data-d="left">◀</button><span class="sp"></span><button class="btn" data-d="right">▶</button>
+      <span class="sp"></span><button class="btn" data-d="down">▼</button><span class="sp"></span>
+    </div>
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     <div class="banner" id="suBanner"></div>`;
   const cv=el.querySelector('#suCanvas'), ctx=cv.getContext('2d');
   const W=cv.width, H=cv.height;
@@ -4998,12 +5271,23 @@ function Submarino(el){
     ctx.fillStyle=fg; ctx.beginPath(); ctx.moveTo(x+18,y); ctx.lineTo(x+52,y-16); ctx.lineTo(x+52,y+16); ctx.closePath(); ctx.fill(); ctx.restore();
   }
 
+<<<<<<< HEAD
   // Controles: botones + teclas + arrastre
   function bindHold(id,dx,dy){ const b=el.querySelector(id);
     const on=e=>{ e.preventDefault(); mueve.x=dx; mueve.y=dy; };
     const off=e=>{ e.preventDefault(); if(dx)mueve.x=0; if(dy)mueve.y=0; };
     b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointerleave',off); }
   bindHold('#suUp',0,-1); bindHold('#suDown',0,1); bindHold('#suL',-1,0); bindHold('#suR',1,0);
+=======
+  // Controles: D-pad (rombo) + teclas + arrastre
+  const DIRS={ up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] };
+  el.querySelectorAll('.dpad [data-d]').forEach(b=>{
+    const [dx,dy]=DIRS[b.dataset.d];
+    const on=e=>{ e.preventDefault(); mueve.x=dx; mueve.y=dy; };
+    const off=e=>{ e.preventDefault(); if(dx)mueve.x=0; if(dy)mueve.y=0; };
+    b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointerleave',off);
+  });
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
   function key(e){ if(e.code==='ArrowLeft')mueve.x=-1; else if(e.code==='ArrowRight')mueve.x=1; else if(e.code==='ArrowUp')mueve.y=-1; else if(e.code==='ArrowDown')mueve.y=1; }
   function keyup(e){ if(e.code==='ArrowLeft'||e.code==='ArrowRight')mueve.x=0; if(e.code==='ArrowUp'||e.code==='ArrowDown')mueve.y=0; }
   document.addEventListener('keydown',key); document.addEventListener('keyup',keyup);
@@ -5026,6 +5310,7 @@ function Submarino(el){
    nivel al ganar la cantidad de rondas pedida.
    ============================================================ */
 const MAGOS_LEVELS=[
+<<<<<<< HEAD
   { meta:3, nodos:3, tiempoRival:6000 },
   { meta:3, nodos:4, tiempoRival:5200 },
   { meta:4, nodos:4, tiempoRival:4400 },
@@ -5037,10 +5322,44 @@ function DueloMagos(el){
   el.innerHTML=`<h2>🔮 Duelo de Magos</h2>
     <p class="lead">Tocá los nodos del hechizo EN ORDEN, más rápido que el mago rival 🧙</p>
     <div class="hud"><span class="lv" id="dmLv"></span><span>Rondas: <span class="stat" id="dmMeta">0</span></span></div>
+=======
+  { meta:3, puntos:3, tiempo:9000, tol:32 },
+  { meta:3, puntos:4, tiempo:8000, tol:30 },
+  { meta:4, puntos:4, tiempo:7000, tol:28 },
+  { meta:4, puntos:5, tiempo:6000, tol:26 },
+  { meta:5, puntos:5, tiempo:5200, tol:24 },
+];
+
+/* Figuras de hechizo: listas de puntos (0..1) que hay que recorrer
+   con el dedo EN ORDEN. Se eligen según cuántos puntos pide el nivel. */
+const HECHIZOS={
+  3:[
+    { nombre:'Triángulo', pts:[[.5,.15],[.85,.8],[.15,.8]], cerrada:true },
+    { nombre:'Rayo',      pts:[[.3,.15],[.6,.5],[.4,.55],[.7,.9]], cerrada:false },
+    { nombre:'Cima',      pts:[[.15,.8],[.5,.2],[.85,.8]], cerrada:false },
+  ],
+  4:[
+    { nombre:'Rombo',     pts:[[.5,.12],[.88,.5],[.5,.88],[.12,.5]], cerrada:true },
+    { nombre:'Zig-zag',   pts:[[.15,.3],[.45,.7],[.6,.3],[.85,.7]], cerrada:false },
+    { nombre:'Cuadrado',  pts:[[.2,.2],[.8,.2],[.8,.8],[.2,.8]], cerrada:true },
+  ],
+  5:[
+    { nombre:'Estrella',  pts:[[.5,.1],[.62,.4],[.9,.4],[.67,.6],[.5,.9]], cerrada:false },
+    { nombre:'Corona',    pts:[[.15,.8],[.3,.3],[.5,.65],[.7,.3],[.85,.8]], cerrada:false },
+    { nombre:'Relámpago', pts:[[.35,.1],[.55,.4],[.4,.45],[.6,.6],[.45,.65],[.7,.9]].slice(0,5), cerrada:false },
+  ],
+};
+
+function DueloMagos(el){
+  el.innerHTML=`<h2>🔮 Duelo de Magos</h2>
+    <p class="lead">Copiá la figura del hechizo dibujando con el dedo, en orden, antes de que se acabe el tiempo ⏳</p>
+    <div class="hud"><span class="lv" id="dmLv"></span><span>Rondas: <span class="stat" id="dmMeta">0</span></span><span>⏳ <span class="stat" id="dmTime">0</span></span></div>
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     <canvas id="dmCanvas" width="300" height="380"></canvas>
     <div class="banner" id="dmBanner"></div>`;
   const cv=el.querySelector('#dmCanvas'), ctx=cv.getContext('2d');
   const W=cv.width, H=cv.height;
+<<<<<<< HEAD
   const cx=W/2, cy=H*0.5, R=70;
 
   let level,cfg,nodos,secuencia,idx,ganadas,rivalProg,rivalActivo,alive,done,raf,tick,resultado;
@@ -5051,10 +5370,23 @@ function DueloMagos(el){
     el.querySelector('#dmLv').textContent='Nivel '+l+'/5';
     el.querySelector('#dmMeta').textContent='0/'+cfg.meta;
     el.querySelector('#dmBanner').textContent='';
+=======
+  // zona de dibujo (centrada)
+  const ZX=40, ZY=70, ZW=W-80, ZH=200;
+
+  let level,cfg,figura,objetivo,idx,ganadas,tiempoRestante,alive,done,raf,tick,resultado,trazo,dibujando,tMostrar;
+
+  function startLevel(l){
+    level=l; cfg=nivelDe(MAGOS_LEVELS,l);
+    ganadas=0; alive=true; done=false; tick=0;
+    el.querySelector('#dmLv').textContent='Nivel '+l+'/5';
+    el.querySelector('#dmMeta').textContent='0/'+cfg.meta;
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     nuevaRonda();
     if(raf) cancelAnimationFrame(raf); raf=requestAnimationFrame(frame);
   }
   function nuevaRonda(){
+<<<<<<< HEAD
     resultado=null; idx=0; rivalProg=0; rivalActivo=true;
     // repartir N nodos en círculo, en posiciones aleatorias
     const n=cfg.nodos; const angs=[];
@@ -5066,19 +5398,36 @@ function DueloMagos(el){
     rondaT0=performance.now();
   }
   let rondaT0=0;
+=======
+    resultado=null; idx=0; trazo=[]; dibujando=false;
+    tiempoRestante=cfg.tiempo; tMostrar=performance.now();
+    const set=HECHIZOS[cfg.puntos]||HECHIZOS[3];
+    figura=set[(Math.random()*set.length)|0];
+    // convertir a coords de pantalla
+    objetivo=figura.pts.map(([px,py])=>({ x:ZX+px*ZW, y:ZY+py*ZH }));
+  }
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
 
   function frame(){
     if(!alive){ draw(); return; }
     tick++;
+<<<<<<< HEAD
     if(rivalActivo && !resultado){
       const cfg2=nivelDe(MAGOS_LEVELS,level);
       rivalProg = Math.min(1, (performance.now()-rondaT0)/cfg2.tiempoRival);
       if(rivalProg>=1){ perderRonda('¡El rival fue más rápido! 🧙‍♂️⚡'); }
+=======
+    if(!resultado){
+      tiempoRestante=cfg.tiempo-(performance.now()-tMostrar);
+      el.querySelector('#dmTime').textContent=Math.max(0,tiempoRestante/1000).toFixed(1);
+      if(tiempoRestante<=0){ perderRonda('¡Se acabó el tiempo! ⏳'); }
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     }
     draw();
     if(alive && !done) raf=requestAnimationFrame(frame);
   }
 
+<<<<<<< HEAD
   function tocarNodo(n){
     if(!alive||done||resultado) return;
     const esperado=secuencia[idx];
@@ -5098,6 +5447,29 @@ function DueloMagos(el){
   }
   function perderRonda(msg){
     resultado='lose'; rivalActivo=false; alive=false; Sonido.play('gameover');
+=======
+  /* El jugador va "capturando" los puntos del objetivo en orden:
+     cuando el dedo pasa cerca del próximo punto (dentro de la
+     tolerancia), lo marca como hecho. Al capturar el último, gana. */
+  function procesarPunto(p){
+    if(resultado||!alive) return;
+    trazo.push({x:p.x,y:p.y,vida:200});
+    if(trazo.length>40) trazo.shift();
+    const meta=objetivo[idx];
+    if(meta && Math.hypot(p.x-meta.x,p.y-meta.y)<cfg.tol){
+      idx++; Sonido.play('tap');
+      if(idx>=objetivo.length){ ganarRonda(); }
+    }
+  }
+  function ganarRonda(){
+    resultado='win'; ganadas++; Sonido.play('acierto'); burst(50);
+    el.querySelector('#dmMeta').textContent=Math.min(ganadas,cfg.meta)+'/'+cfg.meta;
+    if(ganadas>=cfg.meta){ return levelUp(); }
+    setTimeout(()=>{ if(alive&&!done) nuevaRonda(); }, 800);
+  }
+  function perderRonda(msg){
+    resultado='lose'; alive=false; Sonido.play('gameover');
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
     const bn=el.querySelector('#dmBanner');
     bn.innerHTML=`<span style="color:var(--magenta)">${msg}</span> Ganaste ${ganadas}/${cfg.meta} rondas.`;
     const b=document.createElement('button'); b.className='btn alt mt'; b.textContent='Reintentar nivel';
@@ -5119,6 +5491,7 @@ function DueloMagos(el){
   function draw(){
     const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'#241155'); g.addColorStop(1,'#06040f');
     ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+<<<<<<< HEAD
     // estrellas
     for(let i=0;i<30;i++){ const sx=(i*53)%W, sy=(i*97)%H; ctx.fillStyle='rgba(255,255,255,'+(0.2+((i*13)%10)/25)+')'; ctx.beginPath(); ctx.arc(sx,sy,1,0,7); ctx.fill(); }
     glowJ(ctx,cx,cy,120,'rgba(122,60,255,.22)',.6);
@@ -5176,6 +5549,78 @@ function DueloMagos(el){
 
   function pos(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) }; }
   cv.addEventListener('pointerdown',e=>{ const p=pos(e); for(const nd of nodos){ if(Math.hypot(p.x-nd.x,p.y-nd.y)<20){ tocarNodo(nd); break; } } });
+=======
+    for(let i=0;i<30;i++){ const sx=(i*53)%W, sy=(i*97)%H; ctx.fillStyle='rgba(255,255,255,'+(0.2+((i*13)%10)/25)+')'; ctx.beginPath(); ctx.arc(sx,sy,1,0,7); ctx.fill(); }
+    glowJ(ctx,W/2,ZY+ZH/2,150,'rgba(122,60,255,.18)',.6);
+    // nombre de la figura
+    ctx.fillStyle='#c9a9e8'; ctx.font='700 13px "Baloo 2",sans-serif'; ctx.textAlign='center';
+    ctx.fillText('Hechizo: '+(figura?figura.nombre:''), W/2, ZY-14);
+    ctx.textAlign='left';
+    // FIGURA OBJETIVO (líneas guía, tenue)
+    if(objetivo){
+      ctx.strokeStyle='rgba(180,140,255,.5)'; ctx.lineWidth=3; ctx.setLineDash([7,7]); ctx.lineJoin='round';
+      ctx.beginPath(); objetivo.forEach((o,i)=>{ i?ctx.lineTo(o.x,o.y):ctx.moveTo(o.x,o.y); }); if(figura.cerrada) ctx.closePath(); ctx.stroke(); ctx.setLineDash([]);
+      // trazo verde de lo ya hecho
+      if(idx>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle='rgba(140,255,90,.9)'; ctx.lineWidth=4; ctx.lineJoin='round'; ctx.shadowColor='#8cff5a'; ctx.shadowBlur=10;
+        ctx.beginPath(); for(let k=0;k<idx;k++){ const o=objetivo[k]; k?ctx.lineTo(o.x,o.y):ctx.moveTo(o.x,o.y); } ctx.stroke(); ctx.restore(); }
+      // nodos: el próximo resaltado con número
+      objetivo.forEach((o,i)=>{
+        const hecho=i<idx, prox=i===idx&&!resultado;
+        const c= hecho?'#8cff5a':prox?'#ffe14d':'#7a3cff';
+        if(prox) glowJ(ctx,o.x,o.y,18,'rgba(255,225,77,.9)',.9);
+        const ng=ctx.createRadialGradient(o.x-2,o.y-2,1,o.x,o.y,11); ng.addColorStop(0,'#fff'); ng.addColorStop(1,c);
+        ctx.fillStyle=ng; ctx.beginPath(); ctx.arc(o.x,o.y,prox?11:8,0,7); ctx.fill();
+        ctx.fillStyle='#0a0416'; ctx.font='700 11px "Baloo 2",sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
+        ctx.fillText(String(i+1),o.x,o.y); ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+      });
+    }
+    // ESTELA del dedo (como el juego de cortar)
+    if(trazo.length>1){ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.lineCap='round'; ctx.lineJoin='round';
+      for(let i=1;i<trazo.length;i++){ const a=trazo[i-1],b=trazo[i]; const al=i/trazo.length;
+        ctx.strokeStyle='rgba(120,220,255,'+(al*0.8)+')'; ctx.lineWidth=2+al*7; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+      ctx.restore(); }
+    trazo.forEach(t=>t.vida-=6); trazo=trazo.filter(t=>t.vida>0);
+    // magos a los costados
+    dibujarMagoMini(ctx, 26, H-40, 1, '#1a5a9e','#3aa0e8', idx>0);
+    dibujarMagoMini(ctx, W-26, H-40, -1, '#9e1a5a','#ff2e9a', false);
+    // barra de tiempo
+    const frac=Math.max(0, tiempoRestante/cfg.tiempo);
+    ctx.fillStyle='rgba(255,255,255,.12)'; ctx.fillRect(W*0.15,H-20,W*0.7,10);
+    ctx.fillStyle= frac>0.4?'#8cff5a':frac>0.2?'#ffe14d':'#ff2e9a'; ctx.fillRect(W*0.15,H-20,W*0.7*frac,10);
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.5; ctx.strokeRect(W*0.15,H-20,W*0.7,10);
+    if(resultado==='win'){ ctx.fillStyle='#8cff5a'; ctx.font='800 22px "Baloo 2",serif'; ctx.textAlign='center'; ctx.fillText('¡HECHIZO OK!',W/2,ZY+ZH/2); ctx.textAlign='left'; }
+  }
+  function dibujarMagoMini(ctx,x,base,cara,robe,robe2,brillo){
+    ctx.save(); ctx.translate(x,base); ctx.scale(cara,1);
+    const rg=ctx.createLinearGradient(0,-24,0,32); rg.addColorStop(0,robe2); rg.addColorStop(1,robe);
+    ctx.fillStyle=rg; ctx.strokeStyle='rgba(0,0,0,.3)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(-7,-16); ctx.quadraticCurveTo(-12,-4,-17,30); ctx.quadraticCurveTo(0,36,17,30); ctx.quadraticCurveTo(12,-4,7,-16); ctx.closePath(); ctx.fill(); ctx.stroke();
+    const wood=ctx.createLinearGradient(14,-24,18,22); wood.addColorStop(0,'#b5813f'); wood.addColorStop(1,'#6b4a1f');
+    ctx.strokeStyle=wood; ctx.lineWidth=3; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(14,-26); ctx.lineTo(16,22); ctx.stroke();
+    glowJ(ctx,14,-31,14,'rgba(255,225,120,'+(0.6+(brillo?0.4:0))+')',1);
+    const og=ctx.createRadialGradient(12,-34,1,14,-31,7); og.addColorStop(0,'#fff'); og.addColorStop(.5,robe2); og.addColorStop(1,robe);
+    ctx.fillStyle=og; ctx.beginPath(); ctx.arc(14,-31,6,0,7); ctx.fill();
+    ctx.fillStyle='#f0c9a0'; ctx.beginPath(); ctx.arc(0,-22,7,0,7); ctx.fill();
+    ctx.fillStyle='#e8e8f0'; ctx.beginPath(); ctx.moveTo(-5,-18); ctx.quadraticCurveTo(0,-4,5,-18); ctx.quadraticCurveTo(0,-12,-5,-18); ctx.fill();
+    ctx.fillStyle='#2a2a4a'; ctx.beginPath(); ctx.arc(-2.5,-23,1.3,0,7); ctx.arc(2.5,-23,1.3,0,7); ctx.fill();
+    ctx.fillStyle=robe; ctx.beginPath(); ctx.ellipse(0,-29,12,4,0,0,7); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(-9,-29); ctx.quadraticCurveTo(-3,-47,9,-52); ctx.quadraticCurveTo(5,-38,9,-29); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#ffe14d'; ctx.fillRect(-9,-32,18,3);
+    ctx.restore();
+  }
+
+  // Dibujo con el dedo (misma técnica que el juego de cortar frutas)
+  function posicion(e){ const r=cv.getBoundingClientRect(); return { x:(e.clientX-r.left)*(W/r.width), y:(e.clientY-r.top)*(H/r.height) }; }
+  function empezar(e){ e.preventDefault(); if(!alive||resultado)return; dibujando=true; procesarPunto(posicion(e)); }
+  function mover(e){ if(!dibujando)return; e.preventDefault(); procesarPunto(posicion(e)); }
+  function terminar(){ dibujando=false; }
+  cv.addEventListener('pointerdown',empezar);
+  cv.addEventListener('pointermove',mover);
+  cv.addEventListener('pointerup',terminar);
+  cv.addEventListener('pointerleave',terminar);
+  cv.addEventListener('pointercancel',terminar);
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+>>>>>>> 2d9ee85 (fix ju4gos nuevos)
   startLevel(1);
   cleanup=()=>{ if(raf) cancelAnimationFrame(raf); };
 }
